@@ -1,0 +1,46 @@
+# Python包构建文件
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Python编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+venv/
+env/
+.env/
+.venv/
+
+# IDE相关
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 本地配置文件
+.env
+.env.local
+
+# 测试覆盖率报告
+.coverage
+htmlcov/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~ 
