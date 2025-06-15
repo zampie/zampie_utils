@@ -28,4 +28,8 @@ with ContextTimer("my_task", "s"):
 
 # 读取文件
 content = read_file("path/to/your/file.txt")
-``` 
+```
+
+## Pypi
+
+https://pypi.org/project/zampie-utils/0.4.0/
