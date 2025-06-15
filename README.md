@@ -30,6 +30,6 @@ with ContextTimer("my_task", "s"):
 content = read_file("path/to/your/file.txt")
 ```
 
-## Pypi
+## PyPi
 
 https://pypi.org/project/zampie-utils/0.4.0/
