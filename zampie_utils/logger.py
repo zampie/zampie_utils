@@ -1,39 +1,14 @@
 import logging
 from colorlog import ColoredFormatter
-
-
-class Singleton(type):
-    """
-    description:
-    param:
-    return:
-    """
-
-    def __init__(self, *args, **kwargs):
-        """
-        description:
-        param:
-        return:
-        """
-
-        self.__instance = None
-        super().__init__(*args, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        """
-        description:
-        param:
-        return:
-        """
-        if self.__instance is None:
-            self.__instance = super().__call__(*args, **kwargs)
-        return self.__instance
+from .singleton import Singleton
 
 
 class Logger(metaclass=Singleton):
     """"""
 
-    def __init__(self, log_level=logging.INFO, logfile='log.txt', enable_file_handler=False):
+    def __init__(
+        self, log_level=logging.INFO, logfile="log.txt", enable_file_handler=False
+    ):
         """
         description: 初始化日志记录器
         param:
@@ -51,14 +26,15 @@ class Logger(metaclass=Singleton):
             datefmt=None,
             reset=True,
             log_colors={
-                'DEBUG': 'cyan',
-                'INFO': 'green',
-                'WARNING': 'yellow',
-                'ERROR': 'red',
-                'CRITICAL': 'red',
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red",
             },
             secondary_log_colors={},
-            style='%')
+            style="%",
+        )
 
         self.console_handler = logging.StreamHandler()
         self.console_handler.setFormatter(self.console_handler_formatter)
@@ -69,7 +45,7 @@ class Logger(metaclass=Singleton):
         if enable_file_handler:
             self.enable_file_handler(logfile)
 
-    def enable_file_handler(self, logfile='log.txt'):
+    def enable_file_handler(self, logfile="log.txt"):
         """
         description: 启用文件处理器
         param:
@@ -78,7 +54,8 @@ class Logger(metaclass=Singleton):
         """
         if self.file_handler is None:
             self.file_handler_formatter = logging.Formatter(
-                '%(asctime)s - %(levelname)s - %(message)s')
+                "%(asctime)s - %(levelname)s - %(message)s"
+            )
             self.file_handler = logging.FileHandler(logfile)
             self.file_handler.setFormatter(self.file_handler_formatter)
             self.logger.addHandler(self.file_handler)
@@ -142,20 +119,20 @@ class Logger(metaclass=Singleton):
         self.logger.debug(message)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 默认不启用文件处理器
     logger = Logger()
-    logger.info('this is a log message')
-    logger.warning('this is a warning message')
-    logger.error('this is an error message')
-    logger.debug('this is a debug message')
+    logger.info("this is a log message")
+    logger.warning("this is a warning message")
+    logger.error("this is an error message")
+    logger.debug("this is a debug message")
 
     # 启用文件处理器
-    logger.enable_file_handler('test.log')
-    logger.info('this will be written to file')
-    
+    logger.enable_file_handler("test.log")
+    logger.info("this will be written to file")
+
     # 禁用文件处理器
     logger.disable_file_handler()
-    logger.info('this will not be written to file')
+    logger.info("this will not be written to file")
 
     print(f"They are same instance? {id(logger) == id(Logger())}")
