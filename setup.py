@@ -9,12 +9,13 @@ if os.path.exists("README.md"):
 
 setup(
     name="zampie_utils",
-    version="0.3.0",
+    version="0.5.0",
     packages=find_packages(),
     install_requires=[
         "pandas",
         "chardet",
         "colorlog",
+        "rich"
     ],
     author="zampie",
     author_email="zampielzp@gmail.com",
@@ -38,8 +39,3 @@ setup(
 )
 
 
-# pip install -e .  # 安装开发模式
-# pip install build twine  # 安装打包和上传工具
-# python -m build  # 打包
-# twine upload dist/*  # 上传
-# pip install zampie_utils  # 安装
