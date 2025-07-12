@@ -3,7 +3,7 @@ import os
 from typing import List, Dict, Any, Union
 import chardet
 from pathlib import Path
-
+import uuid
 from .logger import Logger
 
 logger = Logger()
@@ -310,3 +310,6 @@ def write_text(content, file_path, encoding=None):
 def append_text(content, file_path, encoding=None):
     """"""
     return default_file_io.append_text(content, file_path, encoding)
+
+def gen_random_name(length=16):
+    return str(uuid.uuid4())[:length]
