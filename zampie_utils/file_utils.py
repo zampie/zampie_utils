@@ -272,44 +272,52 @@ class FileIO:
 
 
 # 创建默认实例
-default_file_io = FileIO()
+file_io = FileIO()
 
 
 # 为了保持向后兼容，提供原始函数接口
 def save_jsonl(dict_list: List[Dict], file_name: Union[str, Path]) -> None:
     """向后兼容的函数接口"""
-    default_file_io.save_jsonl(dict_list, file_name)
+    file_io.save_jsonl(dict_list, file_name)
 
 
 def save_json(obj: Any, file_name: Union[str, Path]) -> None:
     """向后兼容的函数接口"""
-    default_file_io.save_json(obj, file_name)
+    file_io.save_json(obj, file_name)
 
 
 def load_jsonl(file_name: Union[str, Path]) -> List[Dict]:
     """向后兼容的函数接口"""
-    return default_file_io.load_jsonl(file_name)
+    return file_io.load_jsonl(file_name)
 
 
 def load_json(file_name: Union[str, Path]) -> Any:
     """向后兼容的函数接口"""
-    return default_file_io.load_json(file_name)
+    return file_io.load_json(file_name)
 
 def read_file(file_path, encoding=None):
     """"""
-    return default_file_io.read_text(file_path, encoding)
+    return file_io.read_text(file_path, encoding)
 
 def read_text(file_path, encoding=None):
     """"""
-    return default_file_io.read_text(file_path, encoding)
+    return file_io.read_text(file_path, encoding)
 
 def write_text(content, file_path, encoding=None):
     """"""
-    return default_file_io.write_text(content, file_path, encoding)
+    return file_io.write_text(content, file_path, encoding)
 
 def append_text(content, file_path, encoding=None):
     """"""
-    return default_file_io.append_text(content, file_path, encoding)
+    return file_io.append_text(content, file_path, encoding)
 
 def gen_random_name(length=16):
     return str(uuid.uuid4())[:length]
+
+def insert_text_after_ext(file_name, text, ext=None):
+    if ext is None:
+        base_name, ext = os.path.splitext(file_name)
+    else:
+        base_name = os.path.splitext(file_name)[0]
+    new_file_name = f"{base_name}_{text}{ext}"
+    return new_file_name
