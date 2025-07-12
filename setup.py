@@ -9,7 +9,7 @@ if os.path.exists("README.md"):
 
 setup(
     name="zampie_utils",
-    version="0.5.0",
+    version="0.5.1",
     packages=find_packages(),
     install_requires=[
         "pandas",
