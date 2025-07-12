@@ -114,7 +114,7 @@ class Timer:
         timer.start()
         # 处理数据
         elapsed = timer.stop()
-        print(f"耗时: {elapsed} 秒")
+        logger.info(f"耗时: {elapsed} 秒")
     """
     
     def __init__(self, name: str = "timer"):

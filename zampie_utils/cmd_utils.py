@@ -1,9 +1,12 @@
 import subprocess
+from .logger import Logger
+
+logger = Logger()
 
 
 def run_cmd(cmd, shell=True, timeout=None):
     try:
-        print(f"执行命令: {cmd}")
+        logger.info(f"执行命令: {cmd}")
         process = subprocess.Popen(
             cmd,
             shell=shell,
@@ -13,12 +16,18 @@ def run_cmd(cmd, shell=True, timeout=None):
         )
 
         stdout, _ = process.communicate(timeout=timeout)
+        returncode = process.returncode
+        if returncode != 0:
+            logger.warning(f"命令执行失败: {cmd}")
+        
         return stdout.strip()
 
     except subprocess.TimeoutExpired:
         process.kill()
+        logger.error(f"命令执行超时（{timeout}秒）")
         return f"命令执行超时（{timeout}秒）"
     except Exception as e:
+        logger.error(f"执行命令时发生错误：{str(e)}")
         return f"执行命令时发生错误：{str(e)}"
 
 
@@ -38,7 +47,7 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
     """
     process = None
     try:
-        print(f"流式执行命令: {cmd}")
+        logger.info(f"流式执行命令: {cmd}")
         process = subprocess.Popen(
             cmd,
             shell=shell,
@@ -52,7 +61,7 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
         for line in iter(process.stdout.readline, ""):
             line_count += 1
             if line_count > max_lines:
-                print(f"达到最大行数限制 ({max_lines})，终止子进程...")
+                logger.warning(f"达到最大行数限制 ({max_lines})，终止子进程...")
                 break
 
             line = line.strip()
@@ -63,27 +72,29 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
             if line_callback:
                 try:
                     line = line_callback(line)
+                    if not line:
+                        continue
                 except Exception as e:
-                    print(f"处理行失败: {line_count}, 错误: {e}")
+                    logger.error(f"处理行失败: {line_count}, 错误: {e}")
                     continue
-
+            
             yield line
 
     except subprocess.TimeoutExpired:
-        print(f"命令执行超时（{timeout}秒）")
+        logger.error(f"命令执行超时（{timeout}秒）")
 
     except Exception as e:
-        print(f"执行命令时发生错误：{str(e)}")
+        logger.error(f"执行命令时发生错误：{str(e)}")
 
     finally:
         # 确保进程被正确终止
         if process and process.poll() is None:
-            print("正在终止子进程...")
+            logger.info("正在终止子进程...")
             process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                print("强制杀死子进程...")
+                logger.error("强制杀死子进程...")
                 process.kill()
                 process.wait()
-            print("子进程已终止")
+            logger.info("子进程已终止")
