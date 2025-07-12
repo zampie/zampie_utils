@@ -27,8 +27,6 @@ def walk(path, types=None, max_depth=float("inf")):
         for filename in filenames:
             if types:
                 type = filename.split(".")[-1]
-                # type = os.path.splitext(filename)[1]
-                # print(type)
                 if type in types:
                     yield os.path.join(root, filename)
                     continue
@@ -88,7 +86,7 @@ def retry(retries=3, delay=1):
                 except Exception as e:
                     attempts -= 1
                     if attempts == 0:
-                        print("retry failed")
+                        logger.error("retry failed")
                         raise Exception("retry failed")
                         # return None
 
@@ -96,7 +94,7 @@ def retry(retries=3, delay=1):
                     r_delay = delay + delay * 0.25 * (1 - 2 * random.random())
                     r_delay = max(0, r_delay)
 
-                    print(
+                    logger.error(
                         f"{e}, retrying after {r_delay:.2f} seconds, {attempts} retries left"
                     )
 
@@ -126,7 +124,7 @@ def return_on_error(default_value=None):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                print(f"Function {func.__name__} failed with error: {str(e)}")
+                logger.error(f"Function {func.__name__} failed with error: {str(e)}")
                 return default_value
 
         return wrapper
