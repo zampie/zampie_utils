@@ -1,10 +1,9 @@
-from .utils import *
+from .logger import Logger
 from .file_utils import *
 from .time_utils import *
 from .async_utils import *
 from .str_utils import *
-from .logger import Logger
-
+from .utils import *
 
 logger = Logger()
-__version__ = "0.5.1"
+__version__ = "0.5.2"
