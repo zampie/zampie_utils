@@ -1,10 +1,30 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress
-from functools import wraps
 
 from .logger import Logger
 
 logger = Logger()
+
+
+def submit_task(func, item):
+    """根据item的类型决定如何调用函数"""
+    if isinstance(item, dict):
+        # 检查是否是混合格式 {'args': (...), 'kwargs': {...}}
+        if "args" in item and "kwargs" in item:
+            return func(*item["args"], **item["kwargs"])
+        elif "args" in item:
+            return func(*item["args"])
+        elif "kwargs" in item:
+            return func(**item["kwargs"])
+        else:
+            # 纯字典，作为关键字参数
+            return func(**item)
+    elif isinstance(item, (tuple, list)) and not isinstance(item, str):
+        # 元组或列表，作为位置参数
+        return func(*item)
+    else:
+        # 单个值
+        return func(item)
 
 
 def parallel_map(func, items, description="running", max_workers=5):
@@ -40,33 +60,14 @@ def parallel_map(func, items, description="running", max_workers=5):
     """
     results = [None] * len(items)
 
-    def submit_task(item):
-        """根据item的类型决定如何调用函数"""
-        if isinstance(item, dict):
-            # 检查是否是混合格式 {'args': (...), 'kwargs': {...}}
-            if "args" in item and "kwargs" in item:
-                return func(*item["args"], **item["kwargs"])
-            elif "args" in item:
-                return func(*item["args"])
-            elif "kwargs" in item:
-                return func(**item["kwargs"])
-            else:
-                # 纯字典，作为关键字参数
-                return func(**item)
-        elif isinstance(item, (tuple, list)) and not isinstance(item, str):
-            # 元组或列表，作为位置参数
-            return func(*item)
-        else:
-            # 单个值
-            return func(item)
-
     with Progress() as progress:
         total_task = progress.add_task(f"[cyan]{description}...", total=len(items))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务，并保存任务和索引的映射
             future_to_index = {
-                executor.submit(submit_task, item): i for i, item in enumerate(items)
+                executor.submit(submit_task, func, item): i
+                for i, item in enumerate(items)
             }
 
             # 按完成顺序获取结果，但保存到正确的位置
@@ -75,8 +76,8 @@ def parallel_map(func, items, description="running", max_workers=5):
                 try:
                     results[index] = future.result()
                 except Exception as e:
+                    logger.error(f"Error in parallel_map: {e}")
                     results[index] = e
                 progress.update(total_task, advance=1)
 
     return results
-
