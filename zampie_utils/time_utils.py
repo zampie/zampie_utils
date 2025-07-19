@@ -1,6 +1,6 @@
 import time
 from functools import wraps
-from typing import Optional, Union, Callable, Any, Tuple
+from typing import Optional, Callable, Any, Tuple
 
 from .logger import Logger
 
