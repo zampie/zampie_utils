@@ -32,4 +32,4 @@ content = read_file("path/to/your/file.txt")
 
 ## PyPi
 
-https://pypi.org/project/zampie-utils/0.4.0/
+https://pypi.org/project/zampie-utils/
