@@ -1,4 +1,6 @@
 import re
+import json
+
 
 def find_emojis(response):
     """
@@ -48,13 +50,58 @@ def remove_blank_lines(dialog):
 def find_chinese(text):
     """
     提取文本中的中文字符
-    
+
     Args:
         text: str, 输入文本
-        
+
     Returns:
         list: 包含所有中文字符的列表
     """
-    chinese_pattern = re.compile(r'[\u4e00-\u9fff]+', flags=re.UNICODE)
+    chinese_pattern = re.compile(r"[\u4e00-\u9fff]+", flags=re.UNICODE)
     chinese_chars = chinese_pattern.findall(text)
     return "".join(chinese_chars)
+
+
+def load_json_block(json_text):
+    """解析大模型输出的JSON代码块
+
+    Args:
+        json_text (str): 大模型返回的文本，可能包含JSON代码块
+
+    Returns:
+        dict: 解析后的字典，如果解析失败返回None
+    """
+    # 先判断是否包含```json代码块
+    if "```json" in json_text:
+        try:
+            json_pattern = r"```json\s*(.*?)\s*```"
+            match = re.search(json_pattern, json_text, re.DOTALL)
+            if match:
+                json_content = match.group(1).strip()
+                return json.loads(json_content)
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"解析```json代码块失败: {e}")
+            return ""
+
+    # 再判断是否包含普通```代码块
+    elif "```" in json_text:
+        try:
+            code_pattern = r"```\s*(.*?)\s*```"
+            match = re.search(code_pattern, json_text, re.DOTALL)
+            if match:
+                json_content = match.group(1).strip()
+                return json.loads(json_content)
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"解析```代码块失败: {e}")
+            return ""
+
+    # 最后尝试直接解析
+    else:
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError as e:
+            print(f"直接解析JSON失败: {e}")
+            return ""
+
+    print(f"无法解析JSON: {json_text}")
+    return ""
