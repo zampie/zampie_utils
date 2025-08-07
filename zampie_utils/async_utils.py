@@ -74,6 +74,7 @@ def parallel_map(func, items, description="running", max_workers=5):
             for future in as_completed(future_to_index):
                 index = future_to_index[future]
                 try:
+                    logger.info(f"index: {index}, result: {future.result()}")
                     results[index] = future.result()
                 except Exception as e:
                     logger.error(f"Error in parallel_map: {e}")
