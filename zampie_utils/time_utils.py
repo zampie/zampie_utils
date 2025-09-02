@@ -1,6 +1,7 @@
 import time
 from functools import wraps
 from typing import Optional, Callable, Any, Tuple
+from contextlib import deque
 
 from .logger import Logger
 
@@ -37,7 +38,59 @@ def format_time(seconds: float, unit: str = "auto") -> Tuple[float, str]:
         return seconds, "s"
 
 
-def timer(timer_unit: str = "auto", message: str = "") -> Callable:
+class Timer:
+    """
+    计时装饰器类，用于测量函数执行时间
+
+    Args:
+        timer_unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
+        message: 自定义消息，默认使用函数名
+    """
+
+    def __init__(self, timer_unit: str = "auto", message: str = "", history_length: int = 100):
+        self.timer_unit = timer_unit
+        self.message = message
+        self.turn = 0
+        self.history = deque(maxlen=history_length)
+
+    def __call__(self, func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            display_message = self.message if self.message else func.__name__
+            self.turn += 1
+            logger.info(f"{display_message}: 开始执行")
+            start_time = time.time()
+
+            try:
+                result = func(*args, **kwargs)
+
+                elapsed_time = time.time() - start_time
+                formatted_time, unit = format_time(elapsed_time, self.timer_unit)
+                self.history.append(elapsed_time)
+                avg_time = sum(self.history) / len(self.history)
+                avg_formatted_time, avg_unit = format_time(avg_time, self.timer_unit)
+                logger.info(
+                    f"{display_message} 执行完成，耗时: {formatted_time:.3f} {unit}, 平均耗时: {avg_formatted_time:.3f} {avg_unit}"
+                )
+                return result
+
+            except Exception as e:
+                elapsed_time = time.time() - start_time
+                formatted_time, unit = format_time(elapsed_time, self.timer_unit)
+                self.history.append(elapsed_time)
+                avg_time = sum(self.history) / len(self.history)
+                avg_formatted_time, avg_unit = format_time(avg_time, self.timer_unit)
+                logger.error(
+                    f"{display_message} 执行失败，耗时: {formatted_time:.3f} {unit}，平均耗时: {avg_formatted_time:.3f} {avg_unit}，错误: {e}"
+                )
+                raise
+            
+
+        return wrapper
+
+
+# 为了保持向后兼容，可以保留原来的函数版本
+def timer(timer_unit: str = "auto", message: str = "", history_length: int = 100) -> Callable:
     """
     计时装饰器，用于测量函数执行时间
 
@@ -59,38 +112,7 @@ def timer(timer_unit: str = "auto", message: str = "") -> Callable:
             # 处理数据
             pass
     """
-
-    def timer_decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            nonlocal message
-            display_message = message if message else func.__name__
-
-            logger.info(f"{display_message}: 开始执行")
-            start_time = time.time()
-
-            try:
-                result = func(*args, **kwargs)
-
-                elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, timer_unit)
-
-                logger.info(
-                    f"{display_message} 执行完成，耗时: {formatted_time:.3f} {unit}"
-                )
-                return result
-
-            except Exception as e:
-                elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, timer_unit)
-                logger.error(
-                    f"{display_message} 执行失败，耗时: {formatted_time:.3f} {unit}，错误: {e}"
-                )
-                raise
-
-        return wrapper
-
-    return timer_decorator
+    return Timer(timer_unit, message)
 
 
 class ContextTimer:
@@ -132,77 +154,6 @@ class ContextTimer:
             logger.info(f"{self.name} 执行完成，耗时: {formatted_time:.3f} {unit}")
         else:
             logger.error(f"{self.name} 执行异常，耗时: {formatted_time:.3f} {unit}")
-
-
-class Timer:
-    """
-    手动控制的计时器类
-
-    Example:
-        timer = Timer("数据处理")
-        timer.start()
-        # 处理数据
-        elapsed = timer.stop()
-        logger.info(f"耗时: {elapsed} 秒")
-    """
-
-    def __init__(self, name: str = "timer"):
-        self.name = name
-        self.start_time: Optional[float] = None
-        self.end_time: Optional[float] = None
-        self.is_running = False
-
-    def start(self) -> None:
-        """开始计时"""
-        if self.is_running:
-            logger.warning(f"{self.name}: 计时器已在运行")
-            return
-
-        self.start_time = time.time()
-        self.end_time = None
-        self.is_running = True
-        logger.info(f"{self.name}: 开始计时")
-
-    def stop(self) -> float:
-        """
-        停止计时
-
-        Returns:
-            经过的时间（秒）
-        """
-        if not self.is_running:
-            logger.warning(f"{self.name}: 计时器未在运行")
-            return 0.0
-
-        self.end_time = time.time()
-        self.is_running = False
-        elapsed = self.end_time - self.start_time
-        formatted_time, unit = format_time(elapsed, "auto")
-        logger.info(f"{self.name}: 停止计时，耗时: {formatted_time:.3f} {unit}")
-        return elapsed
-
-    def reset(self) -> None:
-        """重置计时器"""
-        self.start_time = None
-        self.end_time = None
-        self.is_running = False
-        logger.info(f"{self.name}: 计时器已重置")
-
-    def elapsed(self) -> float:
-        """
-        获取已经过的时间
-
-        Returns:
-            经过的时间（秒）
-        """
-        if not self.is_running:
-            return (
-                0.0
-                if self.start_time is None
-                else (self.end_time or time.time()) - self.start_time
-            )
-
-        return time.time() - self.start_time
 
 
 def measure_time(func: Callable, *args, **kwargs) -> Tuple[Any, float]:
