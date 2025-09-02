@@ -1,5 +1,5 @@
 import re
-import json
+import json5
 
 
 def find_emojis(response):
@@ -78,8 +78,8 @@ def load_json_block(json_text):
             match = re.search(json_pattern, json_text, re.DOTALL)
             if match:
                 json_content = match.group(1).strip()
-                return json.loads(json_content)
-        except (json.JSONDecodeError, AttributeError) as e:
+                return json5.loads(json_content)
+        except Exception as e:
             print(f"解析```json代码块失败: {e}")
             return ""
 
@@ -90,16 +90,16 @@ def load_json_block(json_text):
             match = re.search(code_pattern, json_text, re.DOTALL)
             if match:
                 json_content = match.group(1).strip()
-                return json.loads(json_content)
-        except (json.JSONDecodeError, AttributeError) as e:
+                return json5.loads(json_content)
+        except Exception as e:
             print(f"解析```代码块失败: {e}")
             return ""
 
     # 最后尝试直接解析
     else:
         try:
-            return json.loads(json_text)
-        except json.JSONDecodeError as e:
+            return json5.loads(json_text)
+        except Exception as e:
             print(f"直接解析JSON失败: {e}")
             return ""
 
