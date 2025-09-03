@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 from rich.logging import RichHandler
 from .singleton import Singleton
 
@@ -37,12 +38,14 @@ class Logger(metaclass=Singleton):
             "%(asctime)s - %(levelname)s - %(message)s"
         )
 
-    def add_file_handler(self, logfile="log.txt", log_level=None):
+    def add_file_handler(self, logfile="log.txt", log_level=None, max_bytes=10*1024*1024, backup_count=5):
         """
-        description: 启用文件处理器
+        description: 启用文件处理器，支持自动滚动日志
         param:
             logfile: 日志文件路径
             log_level: 文件处理器的日志级别，默认使用全局日志级别
+            max_bytes: 单个日志文件的最大大小（字节），默认10MB
+            backup_count: 保留的备份文件数量，默认5个
         return:
             bool: 是否成功添加文件处理器
         """
@@ -52,7 +55,12 @@ class Logger(metaclass=Singleton):
                 self.logger.warning(f"文件处理器 {logfile} 已经存在，跳过添加")
                 return False
             
-            file_handler = logging.FileHandler(logfile, encoding='utf-8')
+            file_handler = RotatingFileHandler(
+                logfile,
+                maxBytes=max_bytes,
+                backupCount=backup_count,
+                encoding='utf-8'
+            )
             
             # 设置日志级别
             if log_level is not None:
@@ -62,7 +70,7 @@ class Logger(metaclass=Singleton):
             self.logger.addHandler(file_handler)
             self.file_handler_dict[logfile] = file_handler
             
-            self.logger.info(f"成功添加文件处理器: {logfile}")
+            self.logger.info(f"成功添加文件处理器: {logfile} (最大大小: {max_bytes/1024/1024:.1f}MB, 备份数量: {backup_count})")
             return True
             
         except Exception as e:
@@ -107,12 +115,17 @@ if __name__ == "__main__":
     logger.error("this is an error message")
     logger.debug("this is a debug message")
 
-    # 启用文件处理器
+    # 启用文件处理器，使用默认滚动设置（10MB，5个备份）
     logger.add_file_handler("test.log")
     logger.info("this will be written to file")
 
+    # 启用文件处理器，自定义滚动设置（5MB，3个备份）
+    logger.add_file_handler("custom.log", max_bytes=5*1024*1024, backup_count=3)
+    logger.info("this will be written to custom file with custom rotation settings")
+
     # 禁用文件处理器
     logger.disable_file_handler("test.log")
+    logger.disable_file_handler("custom.log")
     logger.info("this will not be written to file")
 
     print(f"They are same instance? {id(logger) == id(Logger())}")
