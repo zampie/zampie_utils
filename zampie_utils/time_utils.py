@@ -43,60 +43,71 @@ class Timer:
     计时装饰器类，用于测量函数执行时间
 
     Args:
-        timer_unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
-        message: 自定义消息，默认使用函数名
+        unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
+        name: 计时器名称，默认使用函数名
     """
 
-    def __init__(self, timer_unit: str = "auto", message: str = "", history_length: int = 100):
-        self.timer_unit = timer_unit
-        self.message = message
+    def __init__(
+        self, unit: str = "auto", name: str = "", max_history_length: int = 0
+    ):
+        self.unit = unit
+        self.name = name
         self.turn = 0
-        self.history = deque(maxlen=history_length)
+        self.max_history_length = max_history_length
+        self.history = deque(maxlen=max_history_length)
 
     def __call__(self, func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
-            display_message = self.message if self.message else func.__name__
+            display_name = self.name if self.name else func.__name__
             self.turn += 1
-            logger.info(f"{display_message}: 开始执行")
+            logger.info(f"\"{display_name}\" start")
             start_time = time.time()
 
             try:
                 result = func(*args, **kwargs)
 
                 elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, self.timer_unit)
-                self.history.append(elapsed_time)
-                avg_time = sum(self.history) / len(self.history)
-                avg_formatted_time, avg_unit = format_time(avg_time, self.timer_unit)
-                logger.info(
-                    f"{display_message} 执行完成，耗时: {formatted_time:.3f} {unit}, 平均耗时: {avg_formatted_time:.3f} {avg_unit}"
-                )
+                formatted_time, unit = format_time(elapsed_time, self.unit)
+
+                msg = f"\"{display_name}\" over, cost: {formatted_time:.3f} {unit}"
+                if self.max_history_length > 1:
+                    self.history.append(elapsed_time)
+                    avg_time = sum(self.history) / len(self.history)
+                    avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
+                    msg += f", avg: {avg_formatted_time:.3f} {avg_unit}"
+                logger.info(msg)
+
                 return result
 
             except Exception as e:
                 elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, self.timer_unit)
-                self.history.append(elapsed_time)
-                avg_time = sum(self.history) / len(self.history)
-                avg_formatted_time, avg_unit = format_time(avg_time, self.timer_unit)
-                logger.error(
-                    f"{display_message} 执行失败，耗时: {formatted_time:.3f} {unit}，平均耗时: {avg_formatted_time:.3f} {avg_unit}，错误: {e}"
-                )
+                formatted_time, unit = format_time(elapsed_time, self.unit)
+
+                msg = f"\"{display_name}\" over, cost: {formatted_time:.3f} {unit}"
+                if self.max_history_length > 1:
+                    self.history.append(elapsed_time)
+                    avg_time = sum(self.history) / len(self.history)
+                    avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
+                    msg += f", avg: {avg_formatted_time:.3f} {avg_unit}"
+                msg += f", error: {e}"
+                logger.error(msg)
+
                 raise
-            
 
         return wrapper
 
 
 # 为了保持向后兼容，可以保留原来的函数版本
-def timer(timer_unit: str = "auto", message: str = "", history_length: int = 100) -> Callable:
+def timer(
+    unit: str = "auto", name: str = "", max_history_length: int = 0
+) -> Callable:
     """
     计时装饰器，用于测量函数执行时间
 
     Args:
-        timer_unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
-        message: 自定义消息，默认使用函数名
+        unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
+        name: 自定义消息，默认使用函数名
 
     Returns:
         装饰器函数
@@ -112,7 +123,7 @@ def timer(timer_unit: str = "auto", message: str = "", history_length: int = 100
             # 处理数据
             pass
     """
-    return Timer(timer_unit, message)
+    return Timer(unit, name, max_history_length)
 
 
 class ContextTimer:
@@ -174,15 +185,15 @@ def measure_time(func: Callable, *args, **kwargs) -> Tuple[Any, float]:
     return result, elapsed_time
 
 
-def sleep_with_log(seconds: float, message: str = "") -> None:
+def sleep_with_log(seconds: float, msg: str = "") -> None:
     """
     带日志的睡眠函数
 
     Args:
         seconds: 睡眠时间（秒）
-        message: 日志消息
+        msg: 日志消息
     """
-    msg = message or f"暂停 {seconds} 秒"
+    msg = msg or f"暂停 {seconds} 秒"
     logger.info(f"{msg}: 开始")
     time.sleep(seconds)
     logger.info(f"{msg}: 结束")
