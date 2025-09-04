@@ -77,22 +77,22 @@ class Logger(metaclass=Singleton):
             self.logger.error(f"添加文件处理器失败 {logfile}: {str(e)}")
             return False
 
-    def disable_file_handler(self, logfile="log.txt"):
+    def remove_file_handler(self, logfile="log.txt"):
         """
-        description: 禁用文件处理器
+        description: 移除文件处理器
         param:
             logfile: 日志文件路径
         return:
-            bool: 是否成功禁用文件处理器
+            bool: 是否成功移除文件处理器
         """
         if logfile in self.file_handler_dict:
             try:
                 self.logger.removeHandler(self.file_handler_dict[logfile])
                 self.file_handler_dict.pop(logfile)
-                self.logger.info(f"成功禁用文件处理器: {logfile}")
+                self.logger.info(f"成功移除文件处理器: {logfile}")
                 return True
             except Exception as e:
-                self.logger.error(f"禁用文件处理器失败 {logfile}: {str(e)}")
+                self.logger.error(f"移除文件处理器失败 {logfile}: {str(e)}")
                 return False
         else:
             self.logger.warning(f"文件处理器 {logfile} 不存在")
@@ -124,8 +124,8 @@ if __name__ == "__main__":
     logger.info("this will be written to custom file with custom rotation settings")
 
     # 禁用文件处理器
-    logger.disable_file_handler("test.log")
-    logger.disable_file_handler("custom.log")
+    logger.remove_file_handler("test.log")
+    logger.remove_file_handler("custom.log")
     logger.info("this will not be written to file")
 
     print(f"They are same instance? {id(logger) == id(Logger())}")
