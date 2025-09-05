@@ -130,7 +130,7 @@ def load_json(
         raise
 
 
-def read_text(
+def load_text(
     file_path: Union[str, Path],
     encoding: str = "utf-8",
     auto_detect: bool = True,
@@ -272,7 +272,7 @@ def delete_file(file_path: Union[str, Path]) -> None:
 # 为了保持向后兼容，提供别名函数
 def read_file(file_path, encoding=None):
     """向后兼容的函数接口"""
-    return read_text(file_path, encoding)
+    return load_text(file_path, encoding)
 
 
 def gen_random_name(length=16):
@@ -280,11 +280,27 @@ def gen_random_name(length=16):
     return str(uuid.uuid4())[:length]
 
 
-def insert_text_after_ext(file_name, text, ext=None):
+def insert_text_before_ext(file_name, text, ext=None):
     """在文件名扩展名前插入文本"""
     if ext is None:
-        base_name, ext = os.path.splitext(file_name)
+        name_without_ext, ext = os.path.splitext(file_name)
     else:
-        base_name = os.path.splitext(file_name)[0]
-    new_file_name = f"{base_name}_{text}{ext}"
+        name_without_ext = os.path.splitext(file_name)[0]
+    new_file_name = f"{name_without_ext}{text}{ext}"
     return new_file_name
+
+# 提取文件基础名称
+def extract_base_name(file_name):
+    """提取文件基础名称"""
+    base_name = os.path.basename(file_name)
+    return base_name
+
+# 提取文件扩展名
+def extract_ext(file_name):
+    """提取文件扩展名"""
+    return os.path.splitext(file_name)[1]
+
+# 改变扩展名
+def change_ext(file_name, ext):
+    """改变扩展名"""
+    return os.path.splitext(file_name)[0] + ext

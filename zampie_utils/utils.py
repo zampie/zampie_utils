@@ -12,9 +12,9 @@ logger = Logger()
 
 
 def makedirs(path):
-    """"""
-    if not os.path.isdir(path):
-        os.makedirs(path)
+    """创建目录，如果目录已存在则不会报错"""
+    os.makedirs(path, exist_ok=True)
+    
 
 
 def walk(path, types=None, max_depth=float("inf")):
