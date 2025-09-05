@@ -7,8 +7,7 @@ from .singleton import Singleton
 class Logger(metaclass=Singleton):
     """"""
 
-    def __init__(
-        self, log_level=logging.INFO):
+    def __init__(self):
         """
         description: 初始化日志记录器
         param:
@@ -17,14 +16,13 @@ class Logger(metaclass=Singleton):
             enable_file_handler: 是否启用文件处理器
         return:
         """
-        self.logger = logging.getLogger()
-        self.logger.setLevel(log_level)
+        self.logger = logging.getLogger("zampie_utils.logger")
+        self.logger.setLevel(logging.INFO)
 
         # 控制台处理器 - 使用 Rich
         self.console_handler = RichHandler()
         # Rich 自带格式化，无需额外设置 formatter
         self.logger.addHandler(self.console_handler)
-
 
         # 直接指向方法，避免间接调用，无法定位到文件
         self.info = self.logger.info
@@ -38,7 +36,13 @@ class Logger(metaclass=Singleton):
             "%(asctime)s - %(levelname)s - %(message)s"
         )
 
-    def add_file_handler(self, logfile="log.txt", log_level=None, max_bytes=10*1024*1024, backup_count=5):
+    def add_file_handler(
+        self,
+        logfile="log.txt",
+        log_level=None,
+        max_bytes=10 * 1024 * 1024,
+        backup_count=5,
+    ):
         """
         description: 启用文件处理器，支持自动滚动日志
         param:
@@ -54,25 +58,24 @@ class Logger(metaclass=Singleton):
             if logfile in self.file_handler_dict:
                 self.logger.warning(f"文件处理器 {logfile} 已经存在，跳过添加")
                 return False
-            
+
             file_handler = RotatingFileHandler(
-                logfile,
-                maxBytes=max_bytes,
-                backupCount=backup_count,
-                encoding='utf-8'
+                logfile, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
             )
-            
+
             # 设置日志级别
             if log_level is not None:
                 file_handler.setLevel(log_level)
-            
+
             file_handler.setFormatter(self.file_handler_formatter)
             self.logger.addHandler(file_handler)
             self.file_handler_dict[logfile] = file_handler
-            
-            self.logger.info(f"成功添加文件处理器: {logfile} (最大大小: {max_bytes/1024/1024:.1f}MB, 备份数量: {backup_count})")
+
+            self.logger.info(
+                f"成功添加文件处理器: {logfile} (最大大小: {max_bytes / 1024 / 1024:.1f}MB, 备份数量: {backup_count})"
+            )
             return True
-            
+
         except Exception as e:
             self.logger.error(f"添加文件处理器失败 {logfile}: {str(e)}")
             return False
@@ -98,7 +101,7 @@ class Logger(metaclass=Singleton):
             self.logger.warning(f"文件处理器 {logfile} 不存在")
             return False
 
-    def set_log_level(self, log_level: str):
+    def set_level(self, log_level: str):
         """
         description: 设置日志级别
         param:
@@ -106,6 +109,7 @@ class Logger(metaclass=Singleton):
         return:
         """
         self.logger.setLevel(log_level)
+
 
 if __name__ == "__main__":
     # 默认不启用文件处理器
@@ -120,7 +124,7 @@ if __name__ == "__main__":
     logger.info("this will be written to file")
 
     # 启用文件处理器，自定义滚动设置（5MB，3个备份）
-    logger.add_file_handler("custom.log", max_bytes=5*1024*1024, backup_count=3)
+    logger.add_file_handler("custom.log", max_bytes=5 * 1024 * 1024, backup_count=3)
     logger.info("this will be written to custom file with custom rotation settings")
 
     # 禁用文件处理器
