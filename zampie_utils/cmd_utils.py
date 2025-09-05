@@ -31,7 +31,7 @@ def run_cmd(cmd, shell=True, timeout=None):
         return f"执行命令时发生错误：{str(e)}"
 
 
-def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=10000):
+def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=10000, start_line=0):
     """
     流式执行命令，支持自定义回调函数处理每一行输出
 
@@ -41,6 +41,7 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
         shell: 是否使用shell执行
         timeout: 超时时间（秒）
         max_lines: 最大处理行数
+        start_line: 起始行号（从0开始计数），默认为0
 
     Yields:
         str: 每一行输出
@@ -57,16 +58,30 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
             bufsize=1,
         )
 
-        line_count = 0
+        line_count = 0  # 总行数计数器
+        processed_count = 0  # 已处理行数计数器
+        
         for line in iter(process.stdout.readline, ""):
-            line_count += 1
-            if line_count > max_lines:
-                logger.warning(f"达到最大行数限制 ({max_lines})，终止子进程...")
-                break
-
             line = line.strip()
             if not line:
                 continue
+                
+            # 跳过起始行之前的内容
+            if line_count < start_line:
+                line_count += 1
+                if line_count % 1000 == 0:
+                    logger.info(f"跳过到第 {line_count} 行...")
+                continue
+                
+            # 检查是否达到最大处理行数
+            if processed_count >= max_lines:
+                logger.info(f"达到最大处理行数限制 ({max_lines})，终止子进程...")
+                break
+
+            line_count += 1
+            processed_count += 1
+            
+            logger.info(f"处理第 {line_count} 行 (第 {processed_count} 个处理): {line[:50]}")
 
             # 调用回调函数处理每一行
             if line_callback:
@@ -75,17 +90,17 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
                     if not line:
                         continue
                 except Exception as e:
-                    logger.error(f"处理行失败: {line_count}, 错误: {e}")
+                    print(f"处理行失败: 总第{line_count}行, 处理第{processed_count}行, 错误: {e}")
                     continue
-            
+
             yield line
 
     except subprocess.TimeoutExpired:
-        logger.error(f"命令执行超时（{timeout}秒）")
+        logger.warning(f"命令执行超时（{timeout}秒）")
 
     except Exception as e:
         logger.error(f"执行命令时发生错误：{str(e)}")
-
+        
     finally:
         # 确保进程被正确终止
         if process and process.poll() is None:
@@ -94,7 +109,7 @@ def run_cmd_stream(cmd, line_callback=None, shell=True, timeout=None, max_lines=
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                logger.error("强制杀死子进程...")
+                logger.warning("强制杀死子进程...")
                 process.kill()
                 process.wait()
             logger.info("子进程已终止")
