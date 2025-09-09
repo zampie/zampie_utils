@@ -80,14 +80,17 @@ def retry(retries=3, delay=1, backoff=0.25):
             """
 
             attempts = retries
+            err_history = []
             while attempts > 0:
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
                     attempts -= 1
+                    err_history.append(e)
+                    err_text = "\n".join([str(err) for err in err_history])
                     if attempts == 0:
-                        logger.error("retry failed")
-                        raise Exception("retry failed")
+                        logger.error(f"retry failed: {err_text}")
+                        raise Exception(f"retry failed: {err_text}")
                         # return None
 
                     # 给delay加上25%的随机数，避免多个请求同时重试
@@ -95,7 +98,7 @@ def retry(retries=3, delay=1, backoff=0.25):
                     r_delay = max(0, r_delay)
 
                     logger.error(
-                        f"{e}, retrying after {r_delay:.2f} seconds, {attempts} retries left"
+                        f"{err_text}, retrying after {r_delay:.2f} seconds, {attempts} retries left"
                     )
 
                     time.sleep(r_delay)
