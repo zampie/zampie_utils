@@ -3,6 +3,10 @@ from logging.handlers import RotatingFileHandler
 from rich.logging import RichHandler
 from .singleton import Singleton
 
+# 添加自定义日志级别 NOTICE (25) - 位于 INFO (20) 和 WARNING (30) 之间
+NOTICE_LEVEL = 25
+logging.addLevelName(NOTICE_LEVEL, "NOTICE")
+
 
 class Logger(metaclass=Singleton):
     """"""
@@ -26,6 +30,7 @@ class Logger(metaclass=Singleton):
 
         # 直接指向方法，避免间接调用，无法定位到文件
         self.info = self.logger.info
+        self.notice = self._notice  # 自定义notice方法
         self.warning = self.logger.warning
         self.error = self.logger.error
         self.critical = self.logger.critical
@@ -35,6 +40,57 @@ class Logger(metaclass=Singleton):
         self.file_handler_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
         )
+
+    def _notice(self, message, *args, **kwargs):
+        """
+        description: 自定义notice级别日志方法
+        param:
+            message: 日志消息
+            *args: 额外参数
+            **kwargs: 额外关键字参数
+        return:
+        """
+        if self.logger.isEnabledFor(NOTICE_LEVEL):
+            self.logger._log(NOTICE_LEVEL, message, args, **kwargs)
+
+    def add_console_handler(self):
+        """
+        description: 添加控制台处理器
+        param:
+        return:
+            bool: 是否成功添加控制台处理器
+        """
+        # 检查控制台处理器是否已经存在
+        if self.console_handler in self.logger.handlers:
+            self.logger.warning("控制台处理器已经存在，跳过添加")
+            return False
+        
+        try:
+            self.logger.addHandler(self.console_handler)
+            self.logger.info("成功添加控制台处理器")
+            return True
+        except Exception as e:
+            self.logger.error(f"添加控制台处理器失败: {str(e)}")
+            return False
+
+    def remove_console_handler(self):
+        """
+        description: 移除控制台处理器
+        param:
+        return:
+            bool: 是否成功移除控制台处理器
+        """
+        if self.console_handler is None:
+            self.logger.warning("控制台处理器不存在，无法移除")
+            return False
+            
+        try:
+            self.logger.removeHandler(self.console_handler)
+            self.console_handler = None
+            return True
+        except Exception as e:
+            self.logger.error(f"移除控制台处理器失败: {str(e)}")
+            return False
 
     def add_file_handler(
         self,
@@ -115,6 +171,7 @@ if __name__ == "__main__":
     # 默认不启用文件处理器
     logger = Logger()
     logger.info("this is a log message")
+    logger.notice("this is a notice message")  # 新增的notice级别
     logger.warning("this is a warning message")
     logger.error("this is an error message")
     logger.debug("this is a debug message")
@@ -122,6 +179,7 @@ if __name__ == "__main__":
     # 启用文件处理器，使用默认滚动设置（10MB，5个备份）
     logger.add_file_handler("test.log")
     logger.info("this will be written to file")
+    logger.notice("this notice will also be written to file")
 
     # 启用文件处理器，自定义滚动设置（5MB，3个备份）
     logger.add_file_handler("custom.log", max_bytes=5 * 1024 * 1024, backup_count=3)
