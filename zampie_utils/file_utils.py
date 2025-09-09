@@ -5,15 +5,16 @@ import chardet
 from pathlib import Path
 import uuid
 from .logger import Logger
+from datetime import datetime
 
 logger = Logger()
 
 
 def save_jsonl(
-    dict_list: List[Dict], 
-    file_path: Union[str, Path], 
+    dict_list: List[Dict],
+    file_path: Union[str, Path],
     encoding: str = "utf-8",
-    ensure_ascii: bool = False
+    ensure_ascii: bool = False,
 ) -> None:
     """
     保存字典列表为JSONL文件
@@ -70,10 +71,7 @@ def save_json(
         raise
 
 
-def load_jsonl(
-    file_path: Union[str, Path], 
-    encoding: str = "utf-8"
-) -> List[Dict]:
+def load_jsonl(file_path: Union[str, Path], encoding: str = "utf-8") -> List[Dict]:
     """
     读取JSONL文件，返回解析后的字典列表
 
@@ -100,10 +98,7 @@ def load_jsonl(
         raise
 
 
-def load_json(
-    file_path: Union[str, Path], 
-    encoding: str = "utf-8"
-) -> Any:
+def load_json(file_path: Union[str, Path], encoding: str = "utf-8") -> Any:
     """
     读取JSON文件
 
@@ -172,9 +167,7 @@ def load_text(
 
 
 def write_text(
-    content: str, 
-    file_path: Union[str, Path], 
-    encoding: str = "utf-8"
+    content: str, file_path: Union[str, Path], encoding: str = "utf-8"
 ) -> None:
     """
     写入文本文件
@@ -199,9 +192,7 @@ def write_text(
 
 
 def append_text(
-    content: str, 
-    file_path: Union[str, Path], 
-    encoding: str = "utf-8"
+    content: str, file_path: Union[str, Path], encoding: str = "utf-8"
 ) -> None:
     """
     追加文本到文件
@@ -289,18 +280,61 @@ def insert_text_before_ext(file_name, text, ext=None):
     new_file_name = f"{name_without_ext}{text}{ext}"
     return new_file_name
 
+
 # 提取文件基础名称
 def extract_base_name(file_name):
     """提取文件基础名称"""
     base_name = os.path.basename(file_name)
     return base_name
 
+
 # 提取文件扩展名
 def extract_ext(file_name):
     """提取文件扩展名"""
     return os.path.splitext(file_name)[1]
 
+
 # 改变扩展名
 def change_ext(file_name, ext):
     """改变扩展名"""
     return os.path.splitext(file_name)[0] + ext
+
+
+def gen_timestamp_str(prefix="", suffix="", sep="_"):
+    """生成当前时间字符串"""
+    now_str = datetime.now().strftime(f"%Y{sep}%m{sep}%d{sep}%H{sep}%M")
+
+    if prefix:
+        prefix = f"{prefix}{sep}"
+
+    if suffix:
+        suffix = f"{sep}{suffix}"
+
+    name = f"{prefix}{now_str}{suffix}"
+
+    return name
+
+
+def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True):
+    """生成当前时间文件名"""
+    now_str = datetime.now().strftime(f"%Y{sep}%m{sep}%d{sep}%H{sep}%M")
+
+    if ext and not ext.startswith("."):
+        ext = f".{ext}"
+
+    if prefix:
+        prefix = f"{prefix}{sep}"
+
+    if suffix:
+        suffix = f"{sep}{suffix}"
+
+    file_name = f"{prefix}{now_str}{suffix}{ext}"
+
+    count = 0
+    while os.path.exists(file_name) and auto_rename:
+        logger.warning(f"{file_name} 文件已存在，自动重命名")
+        count += 1
+        file_name = f"{prefix}{now_str}{suffix}{sep}{count:02d}{ext}"
+
+    logger.info(f"生成文件名: {file_name}")
+    return file_name
