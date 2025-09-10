@@ -66,46 +66,32 @@ def find_chinese(text):
     return "".join(chinese_chars)
 
 
-def load_json_block(json_text: str) -> dict:
+def load_json_block(json_text: str):
     """解析大模型输出的JSON代码块
 
     Args:
         json_text: 大模型返回的文本，可能包含JSON代码块
 
     Returns:
-        dict: 解析后的字典，如果解析失败返回空字典
+        Any: 解析后的对象
     """
-    if not json_text or not isinstance(json_text, str):
-        logger.error("输入文本为空或不是字符串")
-        return {}
-    
+
+    json_text = json_text.strip()
     # 先判断是否包含```json代码块
     if "```json" in json_text:
-        try:
-            json_pattern = r"```json\s*(.*?)\s*```"
-            match = re.search(json_pattern, json_text, re.DOTALL)
-            if match:
-                json_content = match.group(1).strip()
-                return json5.loads(json_content)
-        except Exception as e:
-            logger.error(f"解析```json代码块失败: {e}")
-            return {}
+        json_pattern = r"```json\s*(.*?)\s*```"
+        match = re.search(json_pattern, json_text, re.DOTALL)
+        if match:
+            json_content = match.group(1).strip()
 
     # 再判断是否包含普通```代码块
-    if "```" in json_text:
-        try:
-            code_pattern = r"```\s*(.*?)\s*```"
-            match = re.search(code_pattern, json_text, re.DOTALL)
-            if match:
-                json_content = match.group(1).strip()
-                return json5.loads(json_content)
-        except Exception as e:
-            logger.error(f"解析```代码块失败: {e}")
-            return {}
+    elif "```" in json_text:
+        code_pattern = r"```\s*(.*?)\s*```"
+        match = re.search(code_pattern, json_text, re.DOTALL)
+        if match:
+            json_content = match.group(1).strip()
 
-    # 最后尝试直接解析
-    try:
-        return json5.loads(json_text)
-    except Exception as e:
-        logger.error(f"直接解析JSON失败: {e}")
-        return {}
+    else:
+        json_content = json_text
+
+    return json5.loads(json_content)
