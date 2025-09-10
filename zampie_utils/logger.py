@@ -29,12 +29,21 @@ class Logger(metaclass=Singleton):
         self.logger.addHandler(self.console_handler)
 
         # 直接指向方法，避免间接调用，无法定位到文件
+        self.debug = self.logger.debug
         self.info = self.logger.info
         self.notice = self._notice  # 自定义notice方法
         self.warning = self.logger.warning
         self.error = self.logger.error
         self.critical = self.logger.critical
-        self.debug = self.logger.debug
+
+        self.log_router = {
+            "debug": self.debug,
+            "info": self.info,
+            "notice": self.notice,
+            "warning": self.warning,
+            "error": self.error,
+            "critical": self.critical,
+        }
 
         self.file_handler_dict = {}
         self.file_handler_formatter = logging.Formatter(
@@ -53,6 +62,16 @@ class Logger(metaclass=Singleton):
         if self.logger.isEnabledFor(NOTICE_LEVEL):
             self.logger._log(NOTICE_LEVEL, message, args, **kwargs)
 
+    def log(self, level: str, message, *args, **kwargs):
+        """
+        description: 自定义日志方法
+        param:
+            level: 日志级别
+            message: 日志消息
+        """
+
+        return self.log_router.get(level.lower(), self.info)(message, *args, **kwargs)
+
     def add_console_handler(self):
         """
         description: 添加控制台处理器
@@ -64,7 +83,7 @@ class Logger(metaclass=Singleton):
         if self.console_handler in self.logger.handlers:
             self.logger.warning("控制台处理器已经存在，跳过添加")
             return False
-        
+
         try:
             self.logger.addHandler(self.console_handler)
             self.logger.info("成功添加控制台处理器")
@@ -83,7 +102,7 @@ class Logger(metaclass=Singleton):
         if self.console_handler is None:
             self.logger.warning("控制台处理器不存在，无法移除")
             return False
-            
+
         try:
             self.logger.removeHandler(self.console_handler)
             self.console_handler = None
