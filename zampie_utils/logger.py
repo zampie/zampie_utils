@@ -29,6 +29,7 @@ class Logger(metaclass=Singleton):
         self.logger.addHandler(self.console_handler)
 
         # 直接指向方法，避免间接调用，无法定位到文件
+        self.none = lambda *args, **kwargs: None
         self.debug = self.logger.debug
         self.info = self.logger.info
         self.notice = self._notice  # 自定义notice方法
@@ -37,6 +38,7 @@ class Logger(metaclass=Singleton):
         self.critical = self.logger.critical
 
         self.log_router = {
+            "none": self.none,
             "debug": self.debug,
             "info": self.info,
             "notice": self.notice,
@@ -208,5 +210,13 @@ if __name__ == "__main__":
     logger.remove_file_handler("test.log")
     logger.remove_file_handler("custom.log")
     logger.info("this will not be written to file")
+
+    # 这些调用都不会输出任何内容
+    logger.none("这条消息不会显示")
+    logger.log("none", "这条消息也不会显示")
+
+    # 其他级别的日志正常输出
+    logger.info("这条消息会显示")
+    logger.error("这条错误消息会显示")
 
     print(f"They are same instance? {id(logger) == id(Logger())}")
