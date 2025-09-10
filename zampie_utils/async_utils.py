@@ -27,6 +27,33 @@ def submit_task(func, item):
         return func(item)
 
 
+def sequential_map(func, items, description="running"):
+    """
+    顺序执行函数，用于单线程场景（如调试）
+
+    Args:
+        func: 要执行的函数
+        items: 输入数据列表
+        description: 进度条描述
+
+    Returns:
+        按输入顺序排列的结果列表
+    """
+    results = []
+    with Progress() as progress:
+        total_task = progress.add_task(f"[cyan]{description}...", total=len(items))
+        for i, item in enumerate(items):
+            try:
+                result = submit_task(func, item)
+                logger.info(f"index: {i}, result: {result}")
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Error in sequential_map: {e}")
+                results.append(e)
+            progress.update(total_task, advance=1)
+    return results
+
+
 def parallel_map(func, items, description="running", max_workers=5):
     """
     并行执行函数，保证输出顺序与输入顺序一致
@@ -58,6 +85,10 @@ def parallel_map(func, items, description="running", max_workers=5):
                     [{'args': (1, 2), 'kwargs': {'z': 3}},
                      {'args': (4, 5), 'kwargs': {'z': 6}}])
     """
+    # 如果只有一个worker或更少，使用顺序执行，避免线程开销
+    if max_workers <= 1:
+        return sequential_map(func, items, description)
+
     results = [None] * len(items)
 
     with Progress() as progress:
@@ -82,3 +113,19 @@ def parallel_map(func, items, description="running", max_workers=5):
                 progress.update(total_task, advance=1)
 
     return results
+
+
+def map(func, items, description="running", max_workers=1):
+    """
+    智能映射函数，根据max_workers自动选择执行方式
+    
+    Args:
+        func: 要执行的函数
+        items: 输入数据列表
+        description: 进度条描述
+        max_workers: 最大工作线程数，默认为 1（顺序执行）
+        
+    Returns:
+        按输入顺序排列的结果列表
+    """
+    return parallel_map(func, items, description, max_workers)
