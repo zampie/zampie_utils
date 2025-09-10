@@ -27,7 +27,7 @@ def submit_task(func, item):
         return func(item)
 
 
-def sequential_map(func, items, description="running"):
+def sequential_map(func, items, description="running", log_level="info"):
     """
     顺序执行函数，用于单线程场景（如调试）
 
@@ -45,7 +45,7 @@ def sequential_map(func, items, description="running"):
         for i, item in enumerate(items):
             try:
                 result = submit_task(func, item)
-                logger.info(f"index: {i}, result: {result}")
+                logger.log(log_level, f"index: {i}, result: {result}")
                 results.append(result)
             except Exception as e:
                 logger.error(f"Error in sequential_map: {e}")
@@ -54,7 +54,7 @@ def sequential_map(func, items, description="running"):
     return results
 
 
-def parallel_map(func, items, description="running", max_workers=5):
+def parallel_map(func, items, description="running", log_level="info",max_workers=5):
     """
     并行执行函数，保证输出顺序与输入顺序一致
 
@@ -87,7 +87,7 @@ def parallel_map(func, items, description="running", max_workers=5):
     """
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
-        return sequential_map(func, items, description)
+        return sequential_map(func, items, description, log_level)
 
     results = [None] * len(items)
 
@@ -105,7 +105,7 @@ def parallel_map(func, items, description="running", max_workers=5):
             for future in as_completed(future_to_index):
                 index = future_to_index[future]
                 try:
-                    logger.info(f"index: {index}, result: {future.result()}")
+                    logger.log(log_level, f"index: {index}, result: {future.result()}")
                     results[index] = future.result()
                 except Exception as e:
                     logger.error(f"Error in parallel_map: {e}")
@@ -115,7 +115,7 @@ def parallel_map(func, items, description="running", max_workers=5):
     return results
 
 
-def map(func, items, description="running", max_workers=1):
+def map(func, items, description="running", log_level="info", max_workers=1):
     """
     智能映射函数，根据max_workers自动选择执行方式
     
@@ -128,4 +128,4 @@ def map(func, items, description="running", max_workers=1):
     Returns:
         按输入顺序排列的结果列表
     """
-    return parallel_map(func, items, description, max_workers)
+    return parallel_map(func, items, description, log_level, max_workers)
