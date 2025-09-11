@@ -1,5 +1,4 @@
 import json
-import os
 from typing import List, Dict, Any, Union
 import chardet
 from pathlib import Path
@@ -273,31 +272,35 @@ def gen_random_name(length=16):
 
 def insert_text_before_ext(file_name, text, ext=None):
     """在文件名扩展名前插入文本"""
+    path = Path(file_name)
+    
     if ext is None:
-        name_without_ext, ext = os.path.splitext(file_name)
+        # 使用原始文件的扩展名
+        new_name = f"{path.stem}{text}{path.suffix}"
     else:
-        name_without_ext = os.path.splitext(file_name)[0]
-    new_file_name = f"{name_without_ext}{text}{ext}"
-    return new_file_name
+        # 使用指定的扩展名
+        new_name = f"{path.stem}{text}{ext}"
+    
+    return new_name
 
 
 # 提取文件基础名称
 def extract_base_name(file_name):
     """提取文件基础名称"""
-    base_name = os.path.basename(file_name)
+    base_name = Path(file_name).name
     return base_name
 
 
 # 提取文件扩展名
 def extract_ext(file_name):
     """提取文件扩展名"""
-    return os.path.splitext(file_name)[1]
+    return Path(file_name).suffix
 
 
 # 改变扩展名
 def change_ext(file_name, ext):
     """改变扩展名"""
-    return os.path.splitext(file_name)[0] + ext
+    return Path(file_name).stem + ext
 
 
 def gen_timestamp_str(prefix="", suffix="", sep="_", format="%Y_%m_%d_%H"):
@@ -331,7 +334,7 @@ def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=T
     file_name = f"{prefix}{now_str}{suffix}{ext}"
 
     count = 0
-    while os.path.exists(file_name) and auto_rename:
+    while Path(file_name).exists() and auto_rename:
         logger.warning(f"{file_name} 文件已存在，自动重命名")
         count += 1
         file_name = f"{prefix}{now_str}{suffix}{sep}{count:02d}{ext}"
@@ -355,7 +358,7 @@ def gen_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True):
     file_name = f"{prefix}{suffix}{ext}"
 
     count = 0
-    while os.path.exists(file_name) and auto_rename:
+    while Path(file_name).exists() and auto_rename:
         logger.warning(f"{file_name} 文件已存在，自动重命名")
         count += 1
         file_name = f"{prefix}{suffix}{sep}{count:02d}{ext}"
