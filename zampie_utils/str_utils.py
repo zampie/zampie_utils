@@ -1,10 +1,10 @@
 import re
 import json5
+import textwrap
 
 from .logger import Logger
 
 logger = Logger()
-
 
 def find_emojis(response):
     """
@@ -106,7 +106,7 @@ def load_json_block(json_text: str):
     try:
         return json5.loads(json_content)
     except Exception as e:
-        raise ValueError(f"JSON解析失败: {str(e)}\n原始字符串: {truncate_string(json_text)}") from e
+        raise ValueError(f"JSON解析失败: {str(e)}\n原始字符串: {textwrap.shorten(json_text, width=200, placeholder='...')}") from e
 
 
 def truncate_string(text: str, max_length: int = 200, ellipsis: str = "...") -> str:
