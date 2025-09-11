@@ -300,9 +300,9 @@ def change_ext(file_name, ext):
     return os.path.splitext(file_name)[0] + ext
 
 
-def gen_timestamp_str(prefix="", suffix="", sep="_"):
+def gen_timestamp_str(prefix="", suffix="", sep="_", format="%Y_%m_%d_%H"):
     """生成当前时间字符串"""
-    now_str = datetime.now().strftime(f"%Y{sep}%m{sep}%d{sep}%H{sep}%M")
+    now_str = datetime.now().strftime(format)
 
     if prefix:
         prefix = f"{prefix}{sep}"
@@ -315,9 +315,9 @@ def gen_timestamp_str(prefix="", suffix="", sep="_"):
     return name
 
 
-def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True):
+def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True, format="%Y_%m_%d_%H"):
     """生成当前时间文件名"""
-    now_str = datetime.now().strftime(f"%Y{sep}%m{sep}%d{sep}%H{sep}%M")
+    now_str = datetime.now().strftime(format)
 
     if ext and not ext.startswith("."):
         ext = f".{ext}"
@@ -335,6 +335,30 @@ def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=T
         logger.warning(f"{file_name} 文件已存在，自动重命名")
         count += 1
         file_name = f"{prefix}{now_str}{suffix}{sep}{count:02d}{ext}"
+
+    logger.info(f"生成文件名: {file_name}")
+    return file_name
+
+
+def gen_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True):
+    """生成当前时间文件名"""
+
+    if ext and not ext.startswith("."):
+        ext = f".{ext}"
+
+    if prefix:
+        prefix = f"{prefix}{sep}"
+
+    if suffix:
+        suffix = f"{sep}{suffix}"
+
+    file_name = f"{prefix}{suffix}{ext}"
+
+    count = 0
+    while os.path.exists(file_name) and auto_rename:
+        logger.warning(f"{file_name} 文件已存在，自动重命名")
+        count += 1
+        file_name = f"{prefix}{suffix}{sep}{count:02d}{ext}"
 
     logger.info(f"生成文件名: {file_name}")
     return file_name
