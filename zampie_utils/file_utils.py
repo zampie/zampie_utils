@@ -273,14 +273,14 @@ def gen_random_name(length=16):
 def insert_text_before_ext(file_name, text, ext=None):
     """在文件名扩展名前插入文本"""
     path = Path(file_name)
-    
+
     if ext is None:
         # 使用原始文件的扩展名
         new_name = f"{path.stem}{text}{path.suffix}"
     else:
         # 使用指定的扩展名
         new_name = f"{path.stem}{text}{ext}"
-    
+
     return new_name
 
 
@@ -318,7 +318,9 @@ def gen_timestamp_str(prefix="", suffix="", sep="_", format="%Y_%m_%d_%H"):
     return name
 
 
-def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True, format="%Y_%m_%d_%H"):
+def gen_timestamp_file_name(
+    prefix="", suffix="", ext="", sep="_", auto_rename=True, format="%Y_%m_%d_%H"
+):
     """生成当前时间文件名"""
     now_str = datetime.now().strftime(format)
 
@@ -343,25 +345,21 @@ def gen_timestamp_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=T
     return file_name
 
 
-def gen_file_name(prefix="", suffix="", ext="", sep="_", auto_rename=True):
-    """生成当前时间文件名"""
+def gen_file_name(name="", ext="", sep="_", auto_rename=True):
+    """生成文件名"""
+    if not name:
+        name = gen_random_name()
 
     if ext and not ext.startswith("."):
         ext = f".{ext}"
 
-    if prefix:
-        prefix = f"{prefix}{sep}"
-
-    if suffix:
-        suffix = f"{sep}{suffix}"
-
-    file_name = f"{prefix}{suffix}{ext}"
+    file_name = f"{name}{ext}"
 
     count = 0
     while Path(file_name).exists() and auto_rename:
         logger.warning(f"{file_name} 文件已存在，自动重命名")
         count += 1
-        file_name = f"{prefix}{suffix}{sep}{count:02d}{ext}"
+        file_name = f"{name}{sep}{count:02d}{ext}"
 
     logger.info(f"生成文件名: {file_name}")
     return file_name
