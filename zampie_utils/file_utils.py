@@ -303,7 +303,7 @@ def change_ext(file_name, ext):
     return Path(file_name).stem + ext
 
 
-def gen_timestamp_str(prefix="", suffix="", sep="_", format="%Y_%m_%d_%H"):
+def gen_timestamp_str(prefix="", suffix="", sep="_", format="%m_%d_%H_%M"):
     """生成当前时间字符串"""
     now_str = datetime.now().strftime(format)
 
@@ -319,7 +319,7 @@ def gen_timestamp_str(prefix="", suffix="", sep="_", format="%Y_%m_%d_%H"):
 
 
 def gen_timestamp_file_name(
-    prefix="", suffix="", ext="", sep="_", auto_rename=True, format="%Y_%m_%d_%H"
+    prefix="", suffix="", ext="", sep="_", auto_rename=True, format="%m_%d_%H_%M"
 ):
     """生成当前时间文件名"""
     now_str = datetime.now().strftime(format)
