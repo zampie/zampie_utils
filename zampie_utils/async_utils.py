@@ -54,7 +54,7 @@ def sequential_map(func, items, description="running", log_level="info"):
     return results
 
 
-def parallel_map(func, items, description="running", log_level="info",max_workers=5):
+def parallel_map(func, items, description="running", log_level="none", max_workers=5):
     """
     并行执行函数，保证输出顺序与输入顺序一致
 
@@ -118,13 +118,13 @@ def parallel_map(func, items, description="running", log_level="info",max_worker
 def map(func, items, description="running", log_level="info", max_workers=1):
     """
     智能映射函数，根据max_workers自动选择执行方式
-    
+
     Args:
         func: 要执行的函数
         items: 输入数据列表
         description: 进度条描述
         max_workers: 最大工作线程数，默认为 1（顺序执行）
-        
+
     Returns:
         按输入顺序排列的结果列表
     """
