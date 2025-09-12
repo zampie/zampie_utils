@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import Progress
+from functools import wraps
 
 from .logger import Logger
 
@@ -27,21 +28,34 @@ def submit_task(func, item):
         return func(item)
 
 
-def sequential_map(func, items, description="running", log_level="info"):
+def sequential_map(func, items, description=None, log_level="none"):
     """
     顺序执行函数，用于单线程场景（如调试）
 
     Args:
         func: 要执行的函数
         items: 输入数据列表
-        description: 进度条描述
+        description: 进度条描述，默认为函数名 + "running"
 
     Returns:
         按输入顺序排列的结果列表
     """
     results = []
+
+    # 检查是否支持len，如果不支持则转换为列表
+    if not hasattr(items, '__len__'):
+        logger.info("Converting iterator to list for map processing...")
+        items = list(items)
+    
+    total = len(items)
+    
+    # 使用函数名 + "running" 作为默认描述
+    if description is None:
+        func_name = getattr(func, '__name__', 'task')
+        description = f"[green]<{func_name}>[/green] running"
+
     with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...", total=len(items))
+        total_task = progress.add_task(f"[cyan]{description}...", total=total)
         for i, item in enumerate(items):
             try:
                 result = submit_task(func, item)
@@ -54,7 +68,7 @@ def sequential_map(func, items, description="running", log_level="info"):
     return results
 
 
-def parallel_map(func, items, description="running", log_level="none", max_workers=5):
+def parallel_map(func, items, description=None, log_level="none", max_workers=5):
     """
     并行执行函数，保证输出顺序与输入顺序一致
 
@@ -65,6 +79,8 @@ def parallel_map(func, items, description="running", log_level="none", max_worke
             - 元组列表（位置参数）: [(1, 2), (3, 4), (5, 6)]
             - 字典列表（关键字参数）: [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]
             - 混合格式：[{'args': (...), 'kwargs': {...}}, ...]
+        description: 进度条描述，默认为函数名 + "running"
+        log_level: 日志级别
         max_workers: 最大工作线程数，默认为 5
 
     Returns:
@@ -88,6 +104,16 @@ def parallel_map(func, items, description="running", log_level="none", max_worke
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
         return sequential_map(func, items, description, log_level)
+
+    # 检查是否支持len，如果不支持则转换为列表
+    if not hasattr(items, '__len__'):
+        logger.info("Converting iterator to list for map processing...")
+        items = list(items)
+
+    # 使用函数名 + "running" 作为默认描述
+    if description is None:
+        func_name = getattr(func, '__name__', 'task')
+        description = f"[green]<{func_name}>[/green] running"
 
     results = [None] * len(items)
 
@@ -115,14 +141,60 @@ def parallel_map(func, items, description="running", log_level="none", max_worke
     return results
 
 
-def map(func, items, description="running", log_level="info", max_workers=1):
+def mapable(func):
+    """
+    装饰器：将普通函数转换为可并行映射的函数
+    
+    Args:
+        func: 要装饰的函数
+    
+    Returns:
+        装饰后的函数，支持 .map() 方法
+    
+    Examples:
+        @mapable
+        def process_item(x):
+            return x * 2
+        
+        # 使用方式
+        results = process_item.map([1, 2, 3, 4, 5])
+        
+        # 或者直接调用（保持原函数行为）
+        result = process_item(5)  # 返回 10
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        # 如果直接调用函数，保持原有行为
+        return func(*args, **kwargs)
+    
+    def map_method(items, description=None, log_level="none", max_workers=1):
+        """
+        并行映射方法
+        
+        Args:
+            items: 输入数据列表
+            description: 进度条描述，默认为函数名 + "running"
+            log_level: 日志级别
+            max_workers: 最大工作线程数
+        
+        Returns:
+            按输入顺序排列的结果列表
+        """
+        return parallel_map(func, items, description, log_level, max_workers)
+    
+    # 将 map 方法绑定到函数对象
+    wrapper.map = map_method
+    return wrapper
+
+
+def map(func, items, description=None, log_level="none", max_workers=1):
     """
     智能映射函数，根据max_workers自动选择执行方式
 
     Args:
         func: 要执行的函数
         items: 输入数据列表
-        description: 进度条描述
+        description: 进度条描述，默认为函数名 + "running"
         max_workers: 最大工作线程数，默认为 1（顺序执行）
 
     Returns:
