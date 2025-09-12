@@ -10,6 +10,16 @@ logging.addLevelName(NOTICE_LEVEL, "NOTICE")
 
 class Logger(metaclass=Singleton):
     """"""
+    
+    # 字符串到日志级别的映射
+    LEVEL_MAPPING = {
+        "debug": logging.DEBUG,
+        "info": logging.INFO,
+        "notice": NOTICE_LEVEL,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
+        "critical": logging.CRITICAL,
+    }
 
     def __init__(self):
         """
@@ -63,6 +73,24 @@ class Logger(metaclass=Singleton):
         """
         if self.logger.isEnabledFor(NOTICE_LEVEL):
             self.logger._log(NOTICE_LEVEL, message, args, **kwargs)
+
+    def _convert_log_level(self, log_level):
+        """
+        description: 将字符串转换为日志级别常量
+        param:
+            log_level: 日志级别（字符串或常量）
+        return:
+            int: 日志级别常量
+        """
+        # 如果是字符串，转换为对应的日志级别常量
+        if isinstance(log_level, str):
+            log_level_lower = log_level.lower()
+            if log_level_lower in self.LEVEL_MAPPING:
+                return self.LEVEL_MAPPING[log_level_lower]
+            else:
+                raise ValueError(f"不支持的日志级别: {log_level}。支持的级别: {list(self.LEVEL_MAPPING.keys())}")
+        
+        return log_level
 
     def log(self, level: str, message, *args, **kwargs):
         """
@@ -142,6 +170,7 @@ class Logger(metaclass=Singleton):
 
             # 设置日志级别
             if log_level is not None:
+                log_level = self._convert_log_level(log_level)
                 file_handler.setLevel(log_level)
 
             file_handler.setFormatter(self.file_handler_formatter)
@@ -178,13 +207,14 @@ class Logger(metaclass=Singleton):
             self.logger.warning(f"文件处理器 {logfile} 不存在")
             return False
 
-    def set_level(self, log_level: str):
+    def set_level(self, log_level):
         """
         description: 设置日志级别
         param:
-            log_level: 日志级别
+            log_level: 日志级别，支持字符串或logging常量
         return:
         """
+        log_level = self._convert_log_level(log_level)
         self.logger.setLevel(log_level)
 
 
@@ -197,6 +227,22 @@ if __name__ == "__main__":
     logger.error("this is an error message")
     logger.debug("this is a debug message")
 
+    # 测试字符串日志级别设置
+    print("\n=== 测试字符串日志级别设置 ===")
+    logger.set_level("debug")  # 设置为debug级别
+    logger.debug("这条debug消息应该显示")
+    logger.info("这条info消息应该显示")
+    
+    logger.set_level("warning")  # 设置为warning级别
+    logger.debug("这条debug消息不应该显示")
+    logger.info("这条info消息不应该显示")
+    logger.warning("这条warning消息应该显示")
+    logger.error("这条error消息应该显示")
+    
+    logger.set_level("ERROR")  # 测试大写字符串
+    logger.warning("这条warning消息不应该显示")
+    logger.error("这条error消息应该显示")
+
     # 启用文件处理器，使用默认滚动设置（10MB，5个备份）
     logger.add_file_handler("test.log")
     logger.info("this will be written to file")
@@ -206,9 +252,17 @@ if __name__ == "__main__":
     logger.add_file_handler("custom.log", max_bytes=5 * 1024 * 1024, backup_count=3)
     logger.info("this will be written to custom file with custom rotation settings")
 
+    # 测试文件处理器的字符串日志级别
+    print("\n=== 测试文件处理器的字符串日志级别 ===")
+    logger.add_file_handler("level_test.log", log_level="notice")
+    logger.info("这条info消息不会写入文件")
+    logger.notice("这条notice消息会写入文件")
+    logger.warning("这条warning消息会写入文件")
+
     # 禁用文件处理器
     logger.remove_file_handler("test.log")
     logger.remove_file_handler("custom.log")
+    logger.remove_file_handler("level_test.log")
     logger.info("this will not be written to file")
 
     # 这些调用都不会输出任何内容
