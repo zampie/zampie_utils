@@ -53,7 +53,7 @@ def sequential_map(func, items, description=None, log_level="none"):
         description = f"[green]<{func_name}>[/green] running"
 
     with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...[cyan]", total=total)
+        total_task = progress.add_task(f"[cyan]{description}...[/cyan]", total=total)
         for i, item in enumerate(items):
             try:
                 result = submit_task(func, item)
@@ -98,6 +98,15 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
         parallel_map(lambda x, y, z=0: x + y + z,
                     [{'args': (1, 2), 'kwargs': {'z': 3}},
                      {'args': (4, 5), 'kwargs': {'z': 6}}])
+    
+    Problem:
+        Process上下文中会导致icecream不可用,因为
+        # icecream的ic()函数默认将输出写入stderr（标准错误流），而不是stdout（标准输出流）。这会导致：
+        # 输出缓冲问题: stderr和stdout有不同的缓冲策略
+        # 输出顺序混乱: 当使用map等函数时，多个ic()调用的输出可能交错
+        需要手动配置输出函数为print
+        ic.configureOutput(outputFunction=print)
+
     """
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
@@ -116,7 +125,7 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
     results = [None] * len(items)
 
     with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...[cyan]", total=len(items))
+        total_task = progress.add_task(f"[cyan]{description}...[/cyan]", total=len(items))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务，并保存任务和索引的映射
