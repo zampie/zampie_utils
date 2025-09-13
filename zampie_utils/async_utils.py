@@ -53,7 +53,7 @@ def sequential_map(func, items, description=None, log_level="none"):
         description = f"[green]<{func_name}>[/green] running"
 
     with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...", total=total)
+        total_task = progress.add_task(f"[cyan]{description}...[cyan]", total=total)
         for i, item in enumerate(items):
             try:
                 result = submit_task(func, item)
@@ -116,7 +116,7 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
     results = [None] * len(items)
 
     with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...", total=len(items))
+        total_task = progress.add_task(f"[cyan]{description}...[cyan]", total=len(items))
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务，并保存任务和索引的映射
