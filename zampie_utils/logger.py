@@ -10,7 +10,7 @@ logging.addLevelName(NOTICE_LEVEL, "NOTICE")
 
 class Logger(metaclass=Singleton):
     """"""
-    
+
     # 字符串到日志级别的映射
     LEVEL_MAPPING = {
         "debug": logging.DEBUG,
@@ -74,7 +74,8 @@ class Logger(metaclass=Singleton):
         if self.logger.isEnabledFor(NOTICE_LEVEL):
             self.logger._log(NOTICE_LEVEL, message, args, **kwargs)
 
-    def _convert_log_level(self, log_level):
+    @classmethod
+    def _convert_log_level(cls, log_level):
         """
         description: 将字符串转换为日志级别常量
         param:
@@ -85,11 +86,13 @@ class Logger(metaclass=Singleton):
         # 如果是字符串，转换为对应的日志级别常量
         if isinstance(log_level, str):
             log_level_lower = log_level.lower()
-            if log_level_lower in self.LEVEL_MAPPING:
-                return self.LEVEL_MAPPING[log_level_lower]
+            if log_level_lower in cls.LEVEL_MAPPING:
+                return cls.LEVEL_MAPPING[log_level_lower]
             else:
-                raise ValueError(f"不支持的日志级别: {log_level}。支持的级别: {list(self.LEVEL_MAPPING.keys())}")
-        
+                raise ValueError(
+                    f"不支持的日志级别: {log_level}。支持的级别: {list(cls.LEVEL_MAPPING.keys())}"
+                )
+
         return log_level
 
     def log(self, level: str, message, *args, **kwargs):
@@ -218,9 +221,10 @@ class Logger(metaclass=Singleton):
         self.logger.setLevel(log_level)
 
 
+logger = Logger()
+
+
 if __name__ == "__main__":
-    # 默认不启用文件处理器
-    logger = Logger()
     logger.info("this is a log message")
     logger.notice("this is a notice message")  # 新增的notice级别
     logger.warning("this is a warning message")
@@ -232,13 +236,13 @@ if __name__ == "__main__":
     logger.set_level("debug")  # 设置为debug级别
     logger.debug("这条debug消息应该显示")
     logger.info("这条info消息应该显示")
-    
+
     logger.set_level("warning")  # 设置为warning级别
     logger.debug("这条debug消息不应该显示")
     logger.info("这条info消息不应该显示")
     logger.warning("这条warning消息应该显示")
     logger.error("这条error消息应该显示")
-    
+
     logger.set_level("ERROR")  # 测试大写字符串
     logger.warning("这条warning消息不应该显示")
     logger.error("这条error消息应该显示")

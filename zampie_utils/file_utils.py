@@ -3,10 +3,8 @@ from typing import List, Dict, Any, Union
 import chardet
 from pathlib import Path
 import uuid
-from .logger import Logger
+from .logger import logger
 from datetime import datetime
-
-logger = Logger()
 
 
 def save_jsonl(
