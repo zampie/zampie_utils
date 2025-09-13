@@ -2,8 +2,6 @@ import re
 import json5
 import textwrap
 
-from .logger import logger
-
 
 def find_emojis(response):
     """
