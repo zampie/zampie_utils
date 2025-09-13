@@ -2,9 +2,8 @@ import re
 import json5
 import textwrap
 
-from .logger import Logger
+from .logger import logger
 
-logger = Logger()
 
 def find_emojis(response):
     """
@@ -74,14 +73,14 @@ def load_json_block(json_text: str):
 
     Returns:
         Any: 解析后的对象
-        
+
     Raises:
         ValueError: 当JSON解析失败时，包含原始字符串信息
     """
 
     json_text = json_text.strip()
     json_content = None
-    
+
     # 先判断是否包含```json代码块
     if "```json" in json_text:
         json_pattern = r"```json\s*(.*?)\s*```"
@@ -106,21 +105,23 @@ def load_json_block(json_text: str):
     try:
         return json5.loads(json_content)
     except Exception as e:
-        raise ValueError(f"JSON解析失败: {str(e)}\n原始字符串: {textwrap.shorten(json_text, width=200, placeholder='...')}") from e
+        raise ValueError(
+            f"JSON解析失败: {str(e)}\n原始字符串: {textwrap.shorten(json_text, width=200, placeholder='...')}"
+        ) from e
 
 
 def truncate_string(text: str, max_length: int = 200, ellipsis: str = "...") -> str:
     """
     截断过长的字符串，用省略号代替超长部分
-    
+
     Args:
         text: str, 要截断的字符串
         # max_length: int, 最大长度，默认200
         ellipsis: str, 省略号样式，默认"..."
-    
+
     Returns:
         str: 截断后的字符串
-        
+
     Examples:
         >>> truncate_string("这是一个很长的字符串，需要被截断", 10)
         '这是一个很长的...'
@@ -131,14 +132,14 @@ def truncate_string(text: str, max_length: int = 200, ellipsis: str = "...") -> 
     """
     if not isinstance(text, str):
         text = str(text)
-    
+
     if len(text) <= max_length:
         return text
-    
+
     # 计算实际可显示字符数（减去省略号长度）
     available_length = max_length - len(ellipsis)
-    
+
     if available_length <= 0:
         return ellipsis[:max_length]
-    
+
     return text[:available_length] + ellipsis

@@ -3,9 +3,7 @@ from functools import wraps
 from typing import Optional, Callable, Any, Tuple
 from contextlib import deque
 
-from .logger import Logger
-
-logger = Logger()
+from .logger import logger
 
 
 def format_time(seconds: float, unit: str = "auto") -> Tuple[float, str]:
@@ -197,3 +195,52 @@ def sleep_with_log(seconds: float, msg: str = "") -> None:
     logger.info(f"{msg}: 开始")
     time.sleep(seconds)
     logger.info(f"{msg}: 结束")
+
+
+def timeout(seconds):
+    """
+    跨平台超时装饰器，限制函数执行时间
+    
+    Args:
+        seconds: 超时时间（秒）
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            import threading
+            import queue
+            
+            result_queue = queue.Queue()
+            exception_queue = queue.Queue()
+            
+            def target():
+                try:
+                    result = func(*args, **kwargs)
+                    result_queue.put(result)
+                except Exception as e:
+                    exception_queue.put(e)
+            
+            # 在单独线程中执行函数
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            
+            # 等待结果或超时
+            thread.join(timeout=seconds)
+            
+            if thread.is_alive():
+                # 超时了
+                raise TimeoutError(f"函数 {func.__name__} 执行超时 ({seconds}秒)")
+            
+            # 检查是否有异常
+            if not exception_queue.empty():
+                raise exception_queue.get()
+            
+            # 返回结果
+            if not result_queue.empty():
+                return result_queue.get()
+            else:
+                raise TimeoutError(f"函数 {func.__name__} 执行超时 ({seconds}秒)")
+        
+        return wrapper
+    return decorator

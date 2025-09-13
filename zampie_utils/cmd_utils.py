@@ -1,7 +1,6 @@
 import subprocess
-from .logger import Logger
+from .logger import logger
 
-logger = Logger()
 
 
 def run_cmd(cmd, shell=True, timeout=None):
