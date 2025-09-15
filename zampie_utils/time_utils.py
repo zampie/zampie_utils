@@ -46,7 +46,7 @@ class Timer:
     """
 
     def __init__(
-        self, unit: str = "auto", name: str = "", max_history_length: int = 0
+        self, unit: str = "auto", name: str = "", max_history_length: int = 1000
     ):
         self.unit = unit
         self.name = name

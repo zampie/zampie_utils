@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zampie_utils"
-version = "0.7.3"
+version = "0.7.4"
 description = "A collection of utility functions"
 readme = "README.md"
 license = "MIT"
@@ -24,7 +24,8 @@ dependencies = [
     "chardet",
     "rich",
     "natsort",
-    "json5"
+    "json5",
+    "tqdm",
 ]
 
 [project.urls]
