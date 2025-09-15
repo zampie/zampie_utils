@@ -195,7 +195,7 @@ def retry(retries=3, delay=1, backoff=0.25):
         Returns:
             function: 包装后的函数
         """
-
+        @wraps(func)
         def wrapper(*args, **kwargs):
             """
             包装器函数，实现重试逻辑
