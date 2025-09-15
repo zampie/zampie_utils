@@ -1,8 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.progress import Progress
-from functools import wraps
+from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
 
 from .logger import logger
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 
 
 def submit_task(func, item):
@@ -26,14 +30,19 @@ def submit_task(func, item):
         return func(item)
 
 
-def sequential_map(func, items, description=None, log_level="none"):
+def sequential_map(func, items, description=None, log_level="none", progress_type="rich"):
     """
     顺序执行函数，用于单线程场景（如调试）
 
     Args:
         func: 要执行的函数
         items: 输入数据列表
-        description: 进度条描述，默认为函数名 + "running"
+        description: 进度条描述，默认为函数名
+        log_level: 日志级别
+        progress_type: 进度条类型，可选值：
+            - "rich": 使用 rich 进度条（默认）
+            - "tqdm": 使用 tqdm 进度条
+            - "none": 无进度条
 
     Returns:
         按输入顺序排列的结果列表
@@ -47,13 +56,51 @@ def sequential_map(func, items, description=None, log_level="none"):
 
     total = len(items)
 
-    # 使用函数名 + "running" 作为默认描述
+    # 使用函数名
     if description is None:
         func_name = getattr(func, "__name__", "task")
-        description = f"[green]<{func_name}>[/green] running"
+        description = f"<{func_name}>"
 
-    with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...[/cyan]", total=total)
+    if progress_type == "rich":
+        # 使用 rich 进度条，显示数量和进度
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            total_task = progress.add_task(f"[green]{description}[/green]", total=total)
+            for i, item in enumerate(items):
+                try:
+                    result = submit_task(func, item)
+                    logger.log(log_level, f"index: {i}, result: {result}")
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Error in sequential_map: {e}")
+                    results.append(e)
+                progress.update(total_task, advance=1)
+    
+    elif progress_type == "tqdm":
+        # 使用 tqdm 进度条
+        if tqdm is None:
+            logger.warning("tqdm not available, falling back to no progress bar")
+            progress_type = "none"
+        else:
+            with tqdm(total=total, desc=description, unit="item") as pbar:
+                for i, item in enumerate(items):
+                    try:
+                        result = submit_task(func, item)
+                        logger.log(log_level, f"index: {i}, result: {result}")
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Error in sequential_map: {e}")
+                        results.append(e)
+                    pbar.update(1)
+    
+    else:  # progress_type == "none"
+        # 无进度条
         for i, item in enumerate(items):
             try:
                 result = submit_task(func, item)
@@ -62,11 +109,11 @@ def sequential_map(func, items, description=None, log_level="none"):
             except Exception as e:
                 logger.error(f"Error in sequential_map: {e}")
                 results.append(e)
-            progress.update(total_task, advance=1)
+    
     return results
 
 
-def parallel_map(func, items, description=None, log_level="none", max_workers=5):
+def parallel_map(func, items, description=None, log_level="none", max_workers=5, progress_type="rich"):
     """
     并行执行函数，保证输出顺序与输入顺序一致
 
@@ -77,9 +124,13 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
             - 元组列表（位置参数）: [(1, 2), (3, 4), (5, 6)]
             - 字典列表（关键字参数）: [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]
             - 混合格式：[{'args': (...), 'kwargs': {...}}, ...]
-        description: 进度条描述，默认为函数名 + "running"
+        description: 进度条描述，默认为函数名
         log_level: 日志级别
         max_workers: 最大工作线程数，默认为 5
+        progress_type: 进度条类型，可选值：
+            - "rich": 使用 rich 进度条（默认）
+            - "tqdm": 使用 tqdm 进度条
+            - "none": 无进度条
 
     Returns:
         按输入顺序排列的结果列表
@@ -110,23 +161,77 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
     """
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
-        return sequential_map(func, items, description, log_level)
+        return sequential_map(func, items, description, log_level, progress_type)
 
     # 检查是否支持len，如果不支持则转换为列表
     if not hasattr(items, "__len__"):
         logger.info("Converting iterator to list for map processing...")
         items = list(items)
 
-    # 使用函数名 + "running" 作为默认描述
+    # 使用函数名
     if description is None:
         func_name = getattr(func, "__name__", "task")
-        description = f"[green]<{func_name}>[/green] running"
+        description = f"<{func_name}>"
 
     results = [None] * len(items)
 
-    with Progress() as progress:
-        total_task = progress.add_task(f"[cyan]{description}...[/cyan]", total=len(items))
+    if progress_type == "rich":
+        # 使用 rich 进度条，显示数量和进度
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn()
+        ) as progress:
+            total_task = progress.add_task(f"[green]{description}[/green]", total=len(items))
 
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有任务，并保存任务和索引的映射
+                future_to_index = {
+                    executor.submit(submit_task, func, item): i
+                    for i, item in enumerate(items)
+                }
+
+                # 按完成顺序获取结果，但保存到正确的位置
+                for future in as_completed(future_to_index):
+                    index = future_to_index[future]
+                    try:
+                        logger.log(log_level, f"index: {index}, result: {future.result()}")
+                        results[index] = future.result()
+                    except Exception as e:
+                        logger.error(f"Error in parallel_map: {e}")
+                        results[index] = e
+                    progress.update(total_task, advance=1)
+
+    elif progress_type == "tqdm":
+        # 使用 tqdm 进度条
+        if tqdm is None:
+            logger.warning("tqdm not available, falling back to no progress bar")
+            progress_type = "none"
+        else:
+            with tqdm(total=len(items), desc=description, unit="item") as pbar:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    # 提交所有任务，并保存任务和索引的映射
+                    future_to_index = {
+                        executor.submit(submit_task, func, item): i
+                        for i, item in enumerate(items)
+                    }
+
+                    # 按完成顺序获取结果，但保存到正确的位置
+                    for future in as_completed(future_to_index):
+                        index = future_to_index[future]
+                        try:
+                            logger.log(log_level, f"index: {index}, result: {future.result()}")
+                            results[index] = future.result()
+                        except Exception as e:
+                            logger.error(f"Error in parallel_map: {e}")
+                            results[index] = e
+                        pbar.update(1)
+
+    else:  # progress_type == "none"
+        # 无进度条
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务，并保存任务和索引的映射
             future_to_index = {
@@ -143,22 +248,26 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5)
                 except Exception as e:
                     logger.error(f"Error in parallel_map: {e}")
                     results[index] = e
-                progress.update(total_task, advance=1)
 
     return results
 
 
-def auto_map(func, items, description=None, log_level="none", max_workers=1):
+def auto_map(func, items, description=None, log_level="none", max_workers=1, progress_type="rich"):
     """
     智能映射函数，根据max_workers自动选择执行方式
 
     Args:
         func: 要执行的函数
         items: 输入数据列表
-        description: 进度条描述，默认为函数名 + "running"
+        description: 进度条描述，默认为函数名
+        log_level: 日志级别
         max_workers: 最大工作线程数，默认为 1（顺序执行）
+        progress_type: 进度条类型，可选值：
+            - "rich": 使用 rich 进度条（默认）
+            - "tqdm": 使用 tqdm 进度条
+            - "none": 无进度条
 
     Returns:
         按输入顺序排列的结果列表
     """
-    return parallel_map(func, items, description, log_level, max_workers)
+    return parallel_map(func, items, description, log_level, max_workers, progress_type)

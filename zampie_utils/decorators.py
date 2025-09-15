@@ -108,7 +108,7 @@ def mapable(func):
         """
         return func(*args, **kwargs)
 
-    def map_method(items, description=None, log_level="none", max_workers=1):
+    def map_method(items, description=None, log_level="none", max_workers=1, progress_type="rich"):
         """
         并行映射方法
 
@@ -121,7 +121,7 @@ def mapable(func):
         Returns:
             按输入顺序排列的结果列表
         """
-        return parallel_map(func, items, description, log_level, max_workers)
+        return parallel_map(func, items, description, log_level, max_workers, progress_type)
 
     # 将 map 方法绑定到函数对象
     wrapper.map = map_method
