@@ -1,12 +1,14 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.progress import (
+    Progress,
+    TextColumn,
+    BarColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from tqdm import tqdm
 
 from .logger import logger
-
-try:
-    from tqdm import tqdm
-except ImportError:
-    tqdm = None
 
 
 def submit_task(func, item):
@@ -30,7 +32,9 @@ def submit_task(func, item):
         return func(item)
 
 
-def sequential_map(func, items, description=None, log_level="none", progress_type="rich"):
+def sequential_map(
+    func, items, description=None, log_level="none", progress_type="rich"
+):
     """
     顺序执行函数，用于单线程场景（如调试）
 
@@ -81,24 +85,20 @@ def sequential_map(func, items, description=None, log_level="none", progress_typ
                     logger.error(f"Error in sequential_map: {e}")
                     results.append(e)
                 progress.update(total_task, advance=1)
-    
+
     elif progress_type == "tqdm":
         # 使用 tqdm 进度条
-        if tqdm is None:
-            logger.warning("tqdm not available, falling back to no progress bar")
-            progress_type = "none"
-        else:
-            with tqdm(total=total, desc=description, unit="item") as pbar:
-                for i, item in enumerate(items):
-                    try:
-                        result = submit_task(func, item)
-                        logger.log(log_level, f"index: {i}, result: {result}")
-                        results.append(result)
-                    except Exception as e:
-                        logger.error(f"Error in sequential_map: {e}")
-                        results.append(e)
-                    pbar.update(1)
-    
+        with tqdm(total=total, desc=description, unit="item") as pbar:
+            for i, item in enumerate(items):
+                try:
+                    result = submit_task(func, item)
+                    logger.log(log_level, f"index: {i}, result: {result}")
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"Error in sequential_map: {e}")
+                    results.append(e)
+                pbar.update(1)
+
     else:  # progress_type == "none"
         # 无进度条
         for i, item in enumerate(items):
@@ -109,11 +109,13 @@ def sequential_map(func, items, description=None, log_level="none", progress_typ
             except Exception as e:
                 logger.error(f"Error in sequential_map: {e}")
                 results.append(e)
-    
+
     return results
 
 
-def parallel_map(func, items, description=None, log_level="none", max_workers=5, progress_type="rich"):
+def parallel_map(
+    func, items, description=None, log_level="none", max_workers=5, progress_type="rich"
+):
     """
     并行执行函数，保证输出顺序与输入顺序一致
 
@@ -149,7 +151,7 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5,
         parallel_map(lambda x, y, z=0: x + y + z,
                     [{'args': (1, 2), 'kwargs': {'z': 3}},
                      {'args': (4, 5), 'kwargs': {'z': 6}}])
-    
+
     Problem:
         Process上下文中会导致icecream不可用,因为
         # icecream的ic()函数默认将输出写入stderr（标准错误流），而不是stdout（标准输出流）。这会导致：
@@ -183,9 +185,11 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5,
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TextColumn("({task.completed}/{task.total})"),
             TimeElapsedColumn(),
-            TimeRemainingColumn()
+            TimeRemainingColumn(),
         ) as progress:
-            total_task = progress.add_task(f"[green]{description}[/green]", total=len(items))
+            total_task = progress.add_task(
+                f"[green]{description}[/green]", total=len(items)
+            )
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # 提交所有任务，并保存任务和索引的映射
@@ -198,7 +202,9 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5,
                 for future in as_completed(future_to_index):
                     index = future_to_index[future]
                     try:
-                        logger.log(log_level, f"index: {index}, result: {future.result()}")
+                        logger.log(
+                            log_level, f"index: {index}, result: {future.result()}"
+                        )
                         results[index] = future.result()
                     except Exception as e:
                         logger.error(f"Error in parallel_map: {e}")
@@ -223,7 +229,9 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5,
                     for future in as_completed(future_to_index):
                         index = future_to_index[future]
                         try:
-                            logger.log(log_level, f"index: {index}, result: {future.result()}")
+                            logger.log(
+                                log_level, f"index: {index}, result: {future.result()}"
+                            )
                             results[index] = future.result()
                         except Exception as e:
                             logger.error(f"Error in parallel_map: {e}")
@@ -252,7 +260,9 @@ def parallel_map(func, items, description=None, log_level="none", max_workers=5,
     return results
 
 
-def auto_map(func, items, description=None, log_level="none", max_workers=1, progress_type="rich"):
+def auto_map(
+    func, items, description=None, log_level="none", max_workers=1, progress_type="rich"
+):
     """
     智能映射函数，根据max_workers自动选择执行方式
 
