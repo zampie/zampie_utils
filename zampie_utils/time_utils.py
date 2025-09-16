@@ -98,7 +98,7 @@ class Timer:
 
 # 为了保持向后兼容，可以保留原来的函数版本
 def timer(
-    unit: str = "auto", name: str = "", max_history_length: int = 0
+    unit: str = "auto", name: str = "", max_history_length: int = 1000
 ) -> Callable:
     """
     计时装饰器，用于测量函数执行时间
