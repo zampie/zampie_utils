@@ -325,7 +325,7 @@ def gen_timestamp_file_name(
     if ext and not ext.startswith("."):
         ext = f".{ext}"
 
-    if prefix:
+    if prefix and not prefix.endswith(('/', '\\')):
         prefix = f"{prefix}{sep}"
 
     if suffix:
@@ -333,11 +333,8 @@ def gen_timestamp_file_name(
 
     file_name = f"{prefix}{now_str}{suffix}{ext}"
 
-    count = 0
-    while Path(file_name).exists() and auto_rename:
-        logger.warning(f"{file_name} 文件已存在，自动重命名")
-        count += 1
-        file_name = f"{prefix}{now_str}{suffix}{sep}{count:02d}{ext}"
+    if auto_rename:
+        file_name = rename_conflict_file(file_name, sep)
 
     logger.info(f"生成文件名: {file_name}")
     return file_name
@@ -345,7 +342,7 @@ def gen_timestamp_file_name(
 
 def gen_file_name(name="", ext="", sep="_", auto_rename=True):
     """生成文件名"""
-    if not name:
+    if not name or name.endswith(('/', '\\')):
         name = gen_random_name()
 
     if ext and not ext.startswith("."):
@@ -353,11 +350,31 @@ def gen_file_name(name="", ext="", sep="_", auto_rename=True):
 
     file_name = f"{name}{ext}"
 
-    count = 0
-    while Path(file_name).exists() and auto_rename:
-        logger.warning(f"{file_name} 文件已存在，自动重命名")
-        count += 1
-        file_name = f"{name}{sep}{count:02d}{ext}"
+    if auto_rename:
+        file_name = rename_conflict_file(file_name, sep)
 
     logger.info(f"生成文件名: {file_name}")
+    return file_name
+
+
+def rename_conflict_file(file_name, sep="_"):
+    """重命名冲突文件，添加数字后缀"""
+    original_file_name = file_name
+    prefix = Path(file_name).with_suffix('')
+    ext = Path(file_name).suffix
+
+    count = 0
+    while Path(file_name).exists():
+        count += 1
+        file_name = f"{prefix}{sep}{count:02d}{ext}"
+        
+        # 防止无限循环
+        if count > 99999:
+            logger.error(f"无法为文件 {original_file_name} 找到合适的名称")
+            raise FileExistsError(f"无法为文件 {original_file_name} 找到合适的名称")
+    
+    # 只有在重命名后才记录成功信息
+    if count > 0:
+        logger.warning(f"文件 {original_file_name} 已存在，已重命名为: {file_name}")
+    
     return file_name
