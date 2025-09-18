@@ -322,10 +322,12 @@ def gen_timestamp_file_name(
     """生成当前时间文件名"""
     now_str = datetime.now().strftime(format)
 
+    prefix = str(prefix)
+
     if ext and not ext.startswith("."):
         ext = f".{ext}"
 
-    if prefix and not prefix.endswith(('/', '\\')):
+    if prefix and not prefix.endswith(("/", "\\")):
         prefix = f"{prefix}{sep}"
 
     if suffix:
@@ -342,7 +344,9 @@ def gen_timestamp_file_name(
 
 def gen_file_name(name="", ext="", sep="_", auto_rename=True):
     """生成文件名"""
-    if not name or name.endswith(('/', '\\')):
+    name = str(name)
+
+    if not name or name.endswith(("/", "\\")):
         name = gen_random_name()
 
     if ext and not ext.startswith("."):
@@ -360,21 +364,21 @@ def gen_file_name(name="", ext="", sep="_", auto_rename=True):
 def rename_conflict_file(file_name, sep="_"):
     """重命名冲突文件，添加数字后缀"""
     original_file_name = file_name
-    prefix = Path(file_name).with_suffix('')
+    prefix = str(Path(file_name).with_suffix(""))
     ext = Path(file_name).suffix
 
     count = 0
     while Path(file_name).exists():
         count += 1
         file_name = f"{prefix}{sep}{count:02d}{ext}"
-        
+
         # 防止无限循环
         if count > 99999:
             logger.error(f"无法为文件 {original_file_name} 找到合适的名称")
             raise FileExistsError(f"无法为文件 {original_file_name} 找到合适的名称")
-    
+
     # 只有在重命名后才记录成功信息
     if count > 0:
         logger.warning(f"文件 {original_file_name} 已存在，已重命名为: {file_name}")
-    
+
     return file_name
