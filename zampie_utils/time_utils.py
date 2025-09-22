@@ -1,7 +1,6 @@
 import time
 from functools import wraps
 from typing import Optional, Callable, Any, Tuple
-from contextlib import deque
 
 from .logger import logger
 
@@ -43,62 +42,138 @@ class Timer:
     Args:
         unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
         name: 计时器名称，默认使用函数名
+
+    被装饰的函数可以通过以下方式访问执行时间信息：
+        - func.time_info: 包含所有时间信息的字典
+        - func.get_time_info(): 获取时间信息字典的函数
+        
+        字典包含的字段：
+        - last_execution_time: 最后一次执行的原始时间（秒）
+        - last_formatted_time: 最后一次执行的格式化时间值
+        - last_time_unit: 最后一次执行的时间单位
+        - execution_count: 执行次数
+        - total_execution_time: 总执行时间（秒，累计所有执行时间，可能包含并发重复计数）
+        - total_formatted_time: 总执行时间的格式化值
+        - total_time_unit: 总执行时间的单位
+        - span_execution_time: 时间跨度（秒，从第一次开始到现在的时间，避免并发重复计数）
+        - span_formatted_time: 时间跨度的格式化值
+        - span_time_unit: 时间跨度的单位
+        - average_time: 平均执行时间（基于总耗时/总次数）
+        - average_formatted_time: 平均执行时间的格式化值
+        - average_time_unit: 平均执行时间的单位
+        - message: 完整的日志消息（包含执行时间、时间跨度与平均信息）
+
+    Example:
+        @Timer("ms", "数据处理")
+        def process_data():
+            # 处理数据
+            pass
+        
+        process_data()
+        
+        # 获取时间信息
+        info = process_data.get_time_info()
+        print(f"执行时间: {info['last_formatted_time']:.3f} {info['last_time_unit']}")
+        print(f"执行次数: {info['execution_count']}")
+        print(f"总执行时间: {info['total_formatted_time']:.3f} {info['total_time_unit']}")
+        print(f"时间跨度: {info['span_formatted_time']:.3f} {info['span_time_unit']}")
+        print(f"完整消息: {info['message']}")
+        if 'average_time' in info:
+            print(f"平均时间: {info['average_formatted_time']:.3f} {info['average_time_unit']}")
     """
 
     def __init__(
-        self, unit: str = "auto", name: str = "", max_history_length: int = 1000
+        self, unit: str = "auto", name: str = ""
     ):
         self.unit = unit
         self.name = name
         self.turn = 0
-        self.max_history_length = max_history_length
-        self.history = deque(maxlen=max_history_length)
+        self.execution_count = 0  # 单独存储执行次数，不受history长度限制
+        self.total_execution_time = 0.0  # 总执行时间，累计所有执行时间
+        self.span_execution_time = 0.0  # 时间跨度，从第一次开始到现在的时间
+        self.first_start_time = None  # 第一次开始执行的时间
 
     def __call__(self, func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             display_name = self.name if self.name else func.__name__
             self.turn += 1
+            self.execution_count += 1  # 增加执行次数
+            
+            # 记录第一次开始时间
+            if self.first_start_time is None:
+                self.first_start_time = time.time()
+            
             logger.info(f"\"{display_name}\" start")
             start_time = time.time()
 
+            error: Optional[Exception] = None
             try:
                 result = func(*args, **kwargs)
-
-                elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, self.unit)
-
-                msg = f"\"{display_name}\" over, cost: {formatted_time:.3f} {unit}"
-                if self.max_history_length > 1:
-                    self.history.append(elapsed_time)
-                    avg_time = sum(self.history) / len(self.history)
-                    avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
-                    msg += f", avg: {avg_formatted_time:.3f} {avg_unit}"
-                logger.info(msg)
-
                 return result
-
             except Exception as e:
-                elapsed_time = time.time() - start_time
-                formatted_time, unit = format_time(elapsed_time, self.unit)
-
-                msg = f"\"{display_name}\" over, cost: {formatted_time:.3f} {unit}"
-                if self.max_history_length > 1:
-                    self.history.append(elapsed_time)
-                    avg_time = sum(self.history) / len(self.history)
-                    avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
-                    msg += f", avg: {avg_formatted_time:.3f} {avg_unit}"
-                msg += f", error: {e}"
-                logger.error(msg)
-
+                error = e
                 raise
+            finally:
+                elapsed_time = time.time() - start_time
+                self.total_execution_time += elapsed_time  # 累计总执行时间
+                
+                # 计算时间跨度（从第一次开始到现在）
+                if self.first_start_time is not None:
+                    self.span_execution_time = time.time() - self.first_start_time
+                
+                formatted_time, unit = format_time(elapsed_time, self.unit)
+                total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
+                span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
+                # 以总耗时 / 总次数 计算平均耗时
+                avg_time = (self.total_execution_time / self.execution_count) if self.execution_count else 0.0
+                avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
+                msg = (
+                    f"\"{display_name}\" over, cost: {formatted_time:.2f} {unit}, "
+                    f"avg: {avg_formatted_time:.2f} {avg_unit}, "
+                    f"span: {span_formatted_time:.2f} {span_unit}, count: {self.execution_count}"
+                )
 
+                if error is None:
+                    logger.info(msg)
+                else:
+                    msg += f", error: {error}"
+                    logger.error(msg)
+                
+                # 将执行时间信息存储在字典中
+                time_info = {
+                    'message': msg,
+                    'last_execution_time': elapsed_time,
+                    'last_formatted_time': formatted_time,
+                    'last_time_unit': unit,
+                    'execution_count': self.execution_count,
+                    'total_execution_time': self.total_execution_time,
+                    'total_formatted_time': total_formatted_time,
+                    'total_time_unit': total_unit,
+                    'span_execution_time': self.span_execution_time,
+                    'span_formatted_time': span_formatted_time,
+                    'span_time_unit': span_unit,
+                    'average_time': avg_time,
+                    'average_formatted_time': avg_formatted_time,
+                    'average_time_unit': avg_unit,
+                }
+                
+                
+                # 将时间信息字典附加到函数对象上
+                wrapper.time_info = time_info
+
+        # 添加获取时间信息字典的函数
+        def get_time_info() -> dict:
+            """获取执行时间信息的字典"""
+            return getattr(wrapper, 'time_info', {})
+        
+        wrapper.get_time_info = get_time_info
         return wrapper
 
 
 # 为了保持向后兼容，可以保留原来的函数版本
 def timer(
-    unit: str = "auto", name: str = "", max_history_length: int = 1000
+    unit: str = "auto", name: str = ""
 ) -> Callable:
     """
     计时装饰器，用于测量函数执行时间
@@ -121,7 +196,7 @@ def timer(
             # 处理数据
             pass
     """
-    return Timer(unit, name, max_history_length)
+    return Timer(unit, name)
 
 
 class ContextTimer:
