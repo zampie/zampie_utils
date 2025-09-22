@@ -1,4 +1,5 @@
 import time
+import threading
 from functools import wraps
 from typing import Optional, Callable, Any, Tuple
 
@@ -37,7 +38,7 @@ def format_time(seconds: float, unit: str = "auto") -> Tuple[float, str]:
 
 class Timer:
     """
-    计时装饰器类，用于测量函数执行时间
+    线程安全的计时装饰器类，用于测量函数执行时间
 
     Args:
         unit: 时间单位，支持 "auto"(自动选择), "ms"(毫秒), "s"(秒), "min"(分钟), "h"(小时)
@@ -61,7 +62,7 @@ class Timer:
         - average_time: 平均执行时间（基于总耗时/总次数）
         - average_formatted_time: 平均执行时间的格式化值
         - average_time_unit: 平均执行时间的单位
-        - message: 完整的日志消息（包含执行时间、时间跨度与平均信息）
+        - message: 完整的日志消息（包含执行时间、时间跨度与平均信息，以及唯一执行序号seq）
 
     Example:
         @Timer("ms", "数据处理")
@@ -92,17 +93,27 @@ class Timer:
         self.total_execution_time = 0.0  # 总执行时间，累计所有执行时间
         self.span_execution_time = 0.0  # 时间跨度，从第一次开始到现在的时间
         self.first_start_time = None  # 第一次开始执行的时间
+        # 添加线程锁来保证线程安全
+        self._lock = threading.RLock()  # 使用可重入锁，支持同一线程多次获取
+        # 用于生成唯一的执行序号
+        self._execution_sequence = 0
 
     def __call__(self, func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             display_name = self.name if self.name else func.__name__
-            self.turn += 1
-            self.execution_count += 1  # 增加执行次数
             
-            # 记录第一次开始时间
-            if self.first_start_time is None:
-                self.first_start_time = time.time()
+            # 使用锁保护所有共享状态的修改
+            with self._lock:
+                self.turn += 1
+                self.execution_count += 1  # 增加执行次数
+                
+                # 记录第一次开始时间
+                if self.first_start_time is None:
+                    self.first_start_time = time.time()
+            
+            # 在锁外保存当前执行的序号，避免在锁内使用
+            current_count = self.execution_count
             
             logger.info(f"\"{display_name}\" start")
             start_time = time.time()
@@ -116,56 +127,65 @@ class Timer:
                 raise
             finally:
                 elapsed_time = time.time() - start_time
-                self.total_execution_time += elapsed_time  # 累计总执行时间
                 
-                # 计算时间跨度（从第一次开始到现在）
-                if self.first_start_time is not None:
-                    self.span_execution_time = time.time() - self.first_start_time
+                # 使用锁保护所有共享状态的修改
+                with self._lock:
+                    self.total_execution_time += elapsed_time  # 累计总执行时间
+                    
+                    # 计算时间跨度（从第一次开始到现在）
+                    if self.first_start_time is not None:
+                        self.span_execution_time = time.time() - self.first_start_time
+                    
+                    # 在锁内计算所有需要的数据，确保数据一致性
+                    formatted_time, unit = format_time(elapsed_time, self.unit)
+                    total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
+                    span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
+                    # 以总耗时 / 总次数 计算平均耗时
+                    avg_time = (self.total_execution_time / self.execution_count) if self.execution_count else 0.0
+                    avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
+                    
+                    # 在锁内生成消息，使用唯一的执行序号
+                    msg = (
+                        f"\"{display_name}\" over, cost: {formatted_time:.2f} {unit}, "
+                        f"avg: {avg_formatted_time:.2f} {avg_unit}, "
+                        f"span: {span_formatted_time:.2f} {span_unit}, count: {current_count}"
+                    )
+                    
+                    if error is not None:
+                        msg += f", error: {error}"
+                    
+                    # 将执行时间信息存储在字典中
+                    time_info = {
+                        'message': msg,
+                        'last_execution_time': elapsed_time,
+                        'last_formatted_time': formatted_time,
+                        'last_time_unit': unit,
+                        'execution_count': self.execution_count,
+                        'total_execution_time': self.total_execution_time,
+                        'total_formatted_time': total_formatted_time,
+                        'total_time_unit': total_unit,
+                        'span_execution_time': self.span_execution_time,
+                        'span_formatted_time': span_formatted_time,
+                        'span_time_unit': span_unit,
+                        'average_time': avg_time,
+                        'average_formatted_time': avg_formatted_time,
+                        'average_time_unit': avg_unit,
+                    }
                 
-                formatted_time, unit = format_time(elapsed_time, self.unit)
-                total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
-                span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
-                # 以总耗时 / 总次数 计算平均耗时
-                avg_time = (self.total_execution_time / self.execution_count) if self.execution_count else 0.0
-                avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
-                msg = (
-                    f"\"{display_name}\" over, cost: {formatted_time:.2f} {unit}, "
-                    f"avg: {avg_formatted_time:.2f} {avg_unit}, "
-                    f"span: {span_formatted_time:.2f} {span_unit}, count: {self.execution_count}"
-                )
-
+                # 在锁外记录日志，避免长时间持有锁
                 if error is None:
                     logger.info(msg)
                 else:
-                    msg += f", error: {error}"
                     logger.error(msg)
                 
-                # 将执行时间信息存储在字典中
-                time_info = {
-                    'message': msg,
-                    'last_execution_time': elapsed_time,
-                    'last_formatted_time': formatted_time,
-                    'last_time_unit': unit,
-                    'execution_count': self.execution_count,
-                    'total_execution_time': self.total_execution_time,
-                    'total_formatted_time': total_formatted_time,
-                    'total_time_unit': total_unit,
-                    'span_execution_time': self.span_execution_time,
-                    'span_formatted_time': span_formatted_time,
-                    'span_time_unit': span_unit,
-                    'average_time': avg_time,
-                    'average_formatted_time': avg_formatted_time,
-                    'average_time_unit': avg_unit,
-                }
-                
-                
-                # 将时间信息字典附加到函数对象上
+                # 将时间信息附加到函数对象上
                 wrapper.time_info = time_info
 
         # 添加获取时间信息字典的函数
         def get_time_info() -> dict:
             """获取执行时间信息的字典"""
-            return getattr(wrapper, 'time_info', {})
+            with self._lock:  # 确保读取时数据一致性
+                return getattr(wrapper, 'time_info', {})
         
         wrapper.get_time_info = get_time_info
         return wrapper
