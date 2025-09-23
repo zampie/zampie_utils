@@ -102,13 +102,9 @@ class Timer:
         def wrapper(*args, **kwargs) -> Any:
             display_name = self.name if self.name else func.__name__
             
-            # 使用锁保护所有共享状态的修改
-            with self._lock:
-                
-                # 记录第一次开始时间
-                if self.first_start_time is None:
-                    self.first_start_time = time.time()
-            
+            # 记录第一次开始时间
+            if self.first_start_time is None:
+                self.first_start_time = time.time()
             
             logger.info(f"\"{display_name}\" start")
             start_time = time.time()
