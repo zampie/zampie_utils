@@ -52,7 +52,7 @@ class Timer:
         - last_execution_time: 最后一次执行的原始时间（秒）
         - last_formatted_time: 最后一次执行的格式化时间值
         - last_time_unit: 最后一次执行的时间单位
-        - execution_count: 执行次数
+        - turn: 执行次数
         - total_execution_time: 总执行时间（秒，累计所有执行时间，可能包含并发重复计数）
         - total_formatted_time: 总执行时间的格式化值
         - total_time_unit: 总执行时间的单位
@@ -75,7 +75,7 @@ class Timer:
         # 获取时间信息
         info = process_data.get_time_info()
         print(f"执行时间: {info['last_formatted_time']:.3f} {info['last_time_unit']}")
-        print(f"执行次数: {info['execution_count']}")
+        print(f"执行次数: {info['turn']}")
         print(f"总执行时间: {info['total_formatted_time']:.3f} {info['total_time_unit']}")
         print(f"时间跨度: {info['span_formatted_time']:.3f} {info['span_time_unit']}")
         print(f"完整消息: {info['message']}")
@@ -89,7 +89,6 @@ class Timer:
         self.unit = unit
         self.name = name
         self.turn = 0
-        self.execution_count = 0  # 单独存储执行次数，不受history长度限制
         self.total_execution_time = 0.0  # 总执行时间，累计所有执行时间
         self.span_execution_time = 0.0  # 时间跨度，从第一次开始到现在的时间
         self.first_start_time = None  # 第一次开始执行的时间
@@ -105,15 +104,11 @@ class Timer:
             
             # 使用锁保护所有共享状态的修改
             with self._lock:
-                self.turn += 1
-                self.execution_count += 1  # 增加执行次数
                 
                 # 记录第一次开始时间
                 if self.first_start_time is None:
                     self.first_start_time = time.time()
             
-            # 在锁外保存当前执行的序号，避免在锁内使用
-            current_count = self.execution_count
             
             logger.info(f"\"{display_name}\" start")
             start_time = time.time()
@@ -130,6 +125,9 @@ class Timer:
                 
                 # 使用锁保护所有共享状态的修改
                 with self._lock:
+                    # 保存当前执行的序号
+                    self.turn += 1
+
                     self.total_execution_time += elapsed_time  # 累计总执行时间
                     
                     # 计算时间跨度（从第一次开始到现在）
@@ -141,14 +139,14 @@ class Timer:
                     total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
                     span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
                     # 以总耗时 / 总次数 计算平均耗时
-                    avg_time = (self.total_execution_time / self.execution_count) if self.execution_count else 0.0
+                    avg_time = (self.total_execution_time / self.turn) if self.turn else 0.0
                     avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
                     
                     # 在锁内生成消息，使用唯一的执行序号
                     msg = (
                         f"\"{display_name}\" over, cost: {formatted_time:.2f} {unit}, "
                         f"avg: {avg_formatted_time:.2f} {avg_unit}, "
-                        f"span: {span_formatted_time:.2f} {span_unit}, count: {current_count}"
+                        f"span: {span_formatted_time:.2f} {span_unit}, turn: {self.turn}"
                     )
                     
                     if error is not None:
@@ -160,7 +158,7 @@ class Timer:
                         'last_execution_time': elapsed_time,
                         'last_formatted_time': formatted_time,
                         'last_time_unit': unit,
-                        'execution_count': self.execution_count,
+                        'turn': self.turn,
                         'total_execution_time': self.total_execution_time,
                         'total_formatted_time': total_formatted_time,
                         'total_time_unit': total_unit,
