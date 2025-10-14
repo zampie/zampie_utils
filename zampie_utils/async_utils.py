@@ -11,12 +11,14 @@ from tqdm import tqdm
 from .logger import logger
 
 
-def submit_task(func, item, use_kwargs=False):
+def submit_task(func, item, use_args=False, use_kwargs=False):
     """根据item的类型决定如何调用函数
     
     Args:
         func: 要执行的函数
         item: 输入项
+        use_args: 当item是元组或列表时，是否按位置参数传递（True）；
+            为 False 时将元组或列表整体作为一个位置参数传递
         use_kwargs: 当item是字典时，是否按关键字参数传递（True）；
             为 False 时将字典整体作为一个位置参数传递
     """
@@ -37,15 +39,20 @@ def submit_task(func, item, use_kwargs=False):
                 # 将字典整体作为单个位置参数传递
                 return func(item)
     elif isinstance(item, (tuple, list)) and not isinstance(item, str):
-        # 元组或列表，作为位置参数
-        return func(*item)
+        # 元组或列表
+        if use_args:
+            # 作为位置参数传递
+            return func(*item)
+        else:
+            # 将元组或列表整体作为单个位置参数传递
+            return func(item)
     else:
         # 单个值
         return func(item)
 
 
 def sequential_map(
-    func, items, description=None, log_level="none", progress_type="rich", use_kwargs=False
+    func, items, description=None, log_level="none", progress_type="rich", use_args=False, use_kwargs=False
 ):
     """
     顺序执行函数，用于单线程场景（如调试）
@@ -59,6 +66,8 @@ def sequential_map(
             - "rich": 使用 rich 进度条（默认）
             - "tqdm": 使用 tqdm 进度条
             - "none": 无进度条
+        use_args: 当items中的元素是元组或列表时，是否按位置参数传递（True）；
+            为 False 时将元组或列表整体作为一个位置参数传递
         use_kwargs: 当items中的元素是字典时，是否按关键字参数传递（True）；
             为 False 时将字典整体作为一个位置参数传递
 
@@ -92,7 +101,7 @@ def sequential_map(
             total_task = progress.add_task(f"[green]{description}[/green]", total=total)
             for i, item in enumerate(items):
                 try:
-                    result = submit_task(func, item, use_kwargs)
+                    result = submit_task(func, item, use_args, use_kwargs)
                     logger.log(log_level, f"index: {i}, result: {result}")
                     results.append(result)
                 except Exception as e:
@@ -105,7 +114,7 @@ def sequential_map(
         with tqdm(total=total, desc=description, unit="item") as pbar:
             for i, item in enumerate(items):
                 try:
-                    result = submit_task(func, item, use_kwargs)
+                    result = submit_task(func, item, use_args, use_kwargs)
                     logger.log(log_level, f"index: {i}, result: {result}")
                     results.append(result)
                 except Exception as e:
@@ -117,7 +126,7 @@ def sequential_map(
         # 无进度条
         for i, item in enumerate(items):
             try:
-                result = submit_task(func, item, use_kwargs)
+                result = submit_task(func, item, use_args, use_kwargs)
                 logger.log(log_level, f"index: {i}, result: {result}")
                 results.append(result)
             except Exception as e:
@@ -128,7 +137,7 @@ def sequential_map(
 
 
 def parallel_map(
-    func, items, description=None, log_level="none", max_workers=5, progress_type="rich", use_kwargs=False
+    func, items, description=None, log_level="none", max_workers=5, progress_type="rich", use_args=False, use_kwargs=False
 ):
     """
     并行执行函数，保证输出顺序与输入顺序一致
@@ -147,6 +156,8 @@ def parallel_map(
             - "rich": 使用 rich 进度条（默认）
             - "tqdm": 使用 tqdm 进度条
             - "none": 无进度条
+        use_args: 当items中的元素是元组或列表时，是否按位置参数传递（True）；
+            为 False 时将元组或列表整体作为一个位置参数传递
         use_kwargs: 当items中的元素是字典时，是否按关键字参数传递（True）；
             为 False 时将字典整体作为一个位置参数传递
 
@@ -182,7 +193,7 @@ def parallel_map(
     """
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
-        return sequential_map(func, items, description, log_level, progress_type, use_kwargs)
+        return sequential_map(func, items, description, log_level, progress_type, use_args, use_kwargs)
 
     # 检查是否支持len，如果不支持则转换为列表
     if not hasattr(items, "__len__"):
@@ -198,7 +209,7 @@ def parallel_map(
     
     # 创建包装函数来传递 use_kwargs 参数
     def submit_task_wrapper(func, item):
-        return submit_task(func, item, use_kwargs)
+        return submit_task(func, item, use_args, use_kwargs)
 
     if progress_type == "rich":
         # 使用 rich 进度条，显示数量和进度
@@ -284,7 +295,7 @@ def parallel_map(
 
 
 def auto_map(
-    func, items, description=None, log_level="none", max_workers=1, progress_type="rich", use_kwargs=False
+    func, items, description=None, log_level="none", max_workers=1, progress_type="rich", use_args=False, use_kwargs=False
 ):
     """
     智能映射函数，根据max_workers自动选择执行方式
@@ -299,10 +310,12 @@ def auto_map(
             - "rich": 使用 rich 进度条（默认）
             - "tqdm": 使用 tqdm 进度条
             - "none": 无进度条
+        use_args: 当items中的元素是元组或列表时，是否按位置参数传递（True）；
+            为 False 时将元组或列表整体作为一个位置参数传递
         use_kwargs: 当items中的元素是字典时，是否按关键字参数传递（True）；
             为 False 时将字典整体作为一个位置参数传递
 
     Returns:
         按输入顺序排列的结果列表
     """
-    return parallel_map(func, items, description, log_level, max_workers, progress_type, use_kwargs)
+    return parallel_map(func, items, description, log_level, max_workers, progress_type, use_args, use_kwargs)
