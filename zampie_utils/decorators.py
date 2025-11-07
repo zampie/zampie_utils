@@ -219,8 +219,8 @@ def retry(retries=3, delay=1, backoff=0.25):
                 except Exception as e:
                     attempts -= 1
                     err_history.append(e)
-                    err_text = "\n".join([str(err) for err in err_history])
                     if attempts == 0:
+                        err_text = "\n".join([str(err) for err in err_history])
                         logger.error(f"retry failed: {err_text}")
                         raise Exception(f"retry failed: {err_text}")
                         # return None
@@ -230,7 +230,7 @@ def retry(retries=3, delay=1, backoff=0.25):
                     r_delay = max(0, r_delay)
 
                     logger.error(
-                        f"{err_text}, retrying after {r_delay:.2f} seconds, {attempts} retries left"
+                        f"{str(e)}, retrying after {r_delay:.2f} seconds, {attempts} retries left"
                     )
 
                     time.sleep(r_delay)
