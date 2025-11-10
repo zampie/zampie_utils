@@ -54,7 +54,7 @@ def submit_task(func, item, unpack_args=False, unpack_kwargs=False):
 
 
 def sequential_map(
-    func, items, description=None, log_level="none", progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False
+    func, items, description=None, log_level="none", progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False, error_return_value=None
 ):
     """
     顺序执行函数，用于单线程场景（如调试）
@@ -77,6 +77,10 @@ def sequential_map(
         raise_on_error: 控制错误处理方式。
             - True: 遇到错误时立即抛出异常
             - False: 将异常对象添加到结果列表中（默认）
+        error_return_value: 当 raise_on_error=False 时，出错时返回的指定值。
+            - None: 返回 None（默认）
+            - "error_log": 返回错误信息字符串
+            - 其他值: 返回指定的值
 
     Returns:
         按输入顺序排列的结果列表
@@ -118,7 +122,10 @@ def sequential_map(
                     logger.error(f"Error in sequential_map: {e}")
                     if raise_on_error:
                         raise
-                    results.append(e)
+                    if error_return_value == "error_log":
+                        results.append(str(e))
+                    else:
+                        results.append(error_return_value)
                 progress.update(total_task, advance=1)
 
     elif progress_type == "tqdm":
@@ -133,7 +140,10 @@ def sequential_map(
                     logger.error(f"Error in sequential_map: {e}")
                     if raise_on_error:
                         raise
-                    results.append(e)
+                    if error_return_value == "error_log":
+                        results.append(str(e))
+                    else:
+                        results.append(error_return_value)
                 pbar.update(1)
 
     else:  # progress_type == "none"
@@ -147,13 +157,16 @@ def sequential_map(
                 logger.error(f"Error in sequential_map: {e}")
                 if raise_on_error:
                     raise
-                results.append(e)
+                if error_return_value == "error_log":
+                    results.append(str(e))
+                else:
+                    results.append(error_return_value)
 
     return results
 
 
 def parallel_map(
-    func, items, description=None, log_level="none", max_workers=5, progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False
+    func, items, description=None, log_level="none", max_workers=5, progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False, error_return_value=None
 ):
     """
     并行执行函数，保证输出顺序与输入顺序一致
@@ -181,6 +194,10 @@ def parallel_map(
         raise_on_error: 控制错误处理方式。
             - True: 遇到错误时立即抛出异常
             - False: 将异常对象添加到结果列表中（默认）
+        error_return_value: 当 raise_on_error=False 时，出错时返回的指定值。
+            - None: 返回 None（默认）
+            - "error_log": 返回错误信息字符串
+            - 其他值: 返回指定的值
 
     Returns:
         按输入顺序排列的结果列表
@@ -217,7 +234,7 @@ def parallel_map(
     """
     # 如果只有一个worker或更少，使用顺序执行，避免线程开销
     if max_workers <= 1:
-        return sequential_map(func, items, description, log_level, progress_type, unpack_args, unpack_kwargs, raise_on_error)
+        return sequential_map(func, items, description, log_level, progress_type, unpack_args, unpack_kwargs, raise_on_error, error_return_value)
 
     # 检查是否支持len，如果不支持则转换为列表
     if not hasattr(items, "__len__"):
@@ -268,7 +285,10 @@ def parallel_map(
                         logger.error(f"Error in parallel_map: {e}")
                         if raise_on_error:
                             raise
-                        results[index] = e
+                        if error_return_value == "error_log":
+                            results[index] = str(e)
+                        else:
+                            results[index] = error_return_value
                     progress.update(total_task, advance=1)
 
     elif progress_type == "tqdm":
@@ -297,7 +317,10 @@ def parallel_map(
                             logger.error(f"Error in parallel_map: {e}")
                             if raise_on_error:
                                 raise
-                            results[index] = e
+                            if error_return_value == "error_log":
+                                results[index] = str(e)
+                            else:
+                                results[index] = error_return_value
                         pbar.update(1)
 
     else:  # progress_type == "none"
@@ -319,13 +342,16 @@ def parallel_map(
                     logger.error(f"Error in parallel_map: {e}")
                     if raise_on_error:
                         raise
-                    results[index] = e
+                    if error_return_value == "error_log":
+                        results[index] = str(e)
+                    else:
+                        results[index] = error_return_value
 
     return results
 
 
 def auto_map(
-    func, items, description=None, log_level="none", max_workers=1, progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False
+    func, items, description=None, log_level="none", max_workers=1, progress_type="rich", unpack_args=False, unpack_kwargs=False, raise_on_error=False, error_return_value=None
 ):
     """
     智能映射函数，根据max_workers自动选择执行方式
@@ -349,6 +375,10 @@ def auto_map(
         raise_on_error: 控制错误处理方式。
             - True: 遇到错误时立即抛出异常
             - False: 将异常对象添加到结果列表中（默认）
+        error_return_value: 当 raise_on_error=False 时，出错时返回的指定值。
+            - None: 返回 None（默认）
+            - "error_log": 返回错误信息字符串
+            - 其他值: 返回指定的值
 
     Returns:
         按输入顺序排列的结果列表
@@ -356,4 +386,4 @@ def auto_map(
     Raises:
         Exception: 当 raise_on_error=True 且函数执行出错时抛出异常
     """
-    return parallel_map(func, items, description, log_level, max_workers, progress_type, unpack_args, unpack_kwargs, raise_on_error)
+    return parallel_map(func, items, description, log_level, max_workers, progress_type, unpack_args, unpack_kwargs, raise_on_error, error_return_value)
