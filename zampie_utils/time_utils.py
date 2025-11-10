@@ -47,7 +47,7 @@ class Timer:
     被装饰的函数可以通过以下方式访问执行时间信息：
         - func.time_info: 包含所有时间信息的字典
         - func.get_time_info(): 获取时间信息字典的函数
-        
+
         字典包含的字段：
         - last_execution_time: 最后一次执行的原始时间（秒）
         - last_formatted_time: 最后一次执行的格式化时间值
@@ -69,9 +69,9 @@ class Timer:
         def process_data():
             # 处理数据
             pass
-        
+
         process_data()
-        
+
         # 获取时间信息
         info = process_data.get_time_info()
         print(f"执行时间: {info['last_formatted_time']:.3f} {info['last_time_unit']}")
@@ -83,9 +83,7 @@ class Timer:
             print(f"平均时间: {info['average_formatted_time']:.3f} {info['average_time_unit']}")
     """
 
-    def __init__(
-        self, unit: str = "auto", name: str = ""
-    ):
+    def __init__(self, unit: str = "auto", name: str = ""):
         self.unit = unit
         self.name = name
         self.turn = 0
@@ -101,12 +99,12 @@ class Timer:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             display_name = self.name if self.name else func.__name__
-            
+
             # 记录第一次开始时间
             if self.first_start_time is None:
                 self.first_start_time = time.time()
-            
-            logger.info(f"\"{display_name}\" start")
+
+            logger.info(f'"{display_name}" start')
             start_time = time.time()
 
             error: Optional[Exception] = None
@@ -118,60 +116,66 @@ class Timer:
                 raise
             finally:
                 elapsed_time = time.time() - start_time
-                
+
                 # 使用锁保护所有共享状态的修改
                 with self._lock:
                     # 保存当前执行的序号
                     self.turn += 1
 
                     self.total_execution_time += elapsed_time  # 累计总执行时间
-                    
+
                     # 计算时间跨度（从第一次开始到现在）
                     if self.first_start_time is not None:
                         self.span_execution_time = time.time() - self.first_start_time
-                    
+
                     # 在锁内计算所有需要的数据，确保数据一致性
                     formatted_time, unit = format_time(elapsed_time, self.unit)
-                    total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
-                    span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
+                    total_formatted_time, total_unit = format_time(
+                        self.total_execution_time, self.unit
+                    )
+                    span_formatted_time, span_unit = format_time(
+                        self.span_execution_time, self.unit
+                    )
                     # 以总耗时 / 总次数 计算平均耗时
-                    avg_time = (self.total_execution_time / self.turn) if self.turn else 0.0
+                    avg_time = (
+                        (self.total_execution_time / self.turn) if self.turn else 0.0
+                    )
                     avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
-                    
+
                     # 在锁内生成消息，使用唯一的执行序号
                     msg = (
-                        f"\"{display_name}\" over, cost: {formatted_time:.2f} {unit}, "
+                        f'"{display_name}" over, cost: {formatted_time:.2f} {unit}, '
                         f"avg: {avg_formatted_time:.2f} {avg_unit}, "
                         f"span: {span_formatted_time:.2f} {span_unit}, turn: {self.turn}"
                     )
-                    
+
                     if error is not None:
                         msg += f", error: {error}"
-                    
+
                     # 将执行时间信息存储在字典中
                     time_info = {
-                        'message': msg,
-                        'last_execution_time': elapsed_time,
-                        'last_formatted_time': formatted_time,
-                        'last_time_unit': unit,
-                        'turn': self.turn,
-                        'total_execution_time': self.total_execution_time,
-                        'total_formatted_time': total_formatted_time,
-                        'total_time_unit': total_unit,
-                        'span_execution_time': self.span_execution_time,
-                        'span_formatted_time': span_formatted_time,
-                        'span_time_unit': span_unit,
-                        'average_time': avg_time,
-                        'average_formatted_time': avg_formatted_time,
-                        'average_time_unit': avg_unit,
+                        "message": msg,
+                        "last_execution_time": elapsed_time,
+                        "last_formatted_time": formatted_time,
+                        "last_time_unit": unit,
+                        "turn": self.turn,
+                        "total_execution_time": self.total_execution_time,
+                        "total_formatted_time": total_formatted_time,
+                        "total_time_unit": total_unit,
+                        "span_execution_time": self.span_execution_time,
+                        "span_formatted_time": span_formatted_time,
+                        "span_time_unit": span_unit,
+                        "average_time": avg_time,
+                        "average_formatted_time": avg_formatted_time,
+                        "average_time_unit": avg_unit,
                     }
-                
+
                 # 在锁外记录日志，避免长时间持有锁
                 if error is None:
                     logger.info(msg)
                 else:
                     logger.error(msg)
-                
+
                 # 将时间信息附加到函数对象上
                 wrapper.time_info = time_info
 
@@ -179,16 +183,14 @@ class Timer:
         def get_time_info() -> dict:
             """获取执行时间信息的字典"""
             with self._lock:  # 确保读取时数据一致性
-                return getattr(wrapper, 'time_info', {})
-        
+                return getattr(wrapper, "time_info", {})
+
         wrapper.get_time_info = get_time_info
         return wrapper
 
 
 # 为了保持向后兼容，可以保留原来的函数版本
-def timer(
-    unit: str = "auto", name: str = ""
-) -> Callable:
+def timer(unit: str = "auto", name: str = "") -> Callable:
     """
     计时装饰器，用于测量函数执行时间
 
@@ -289,47 +291,67 @@ def sleep_with_log(seconds: float, msg: str = "") -> None:
 def timeout(seconds):
     """
     跨平台超时装饰器，限制函数执行时间
-    
+
     Args:
         seconds: 超时时间（秒）
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             import threading
             import queue
-            
+
             result_queue = queue.Queue()
             exception_queue = queue.Queue()
-            
+
             def target():
                 try:
                     result = func(*args, **kwargs)
                     result_queue.put(result)
                 except Exception as e:
                     exception_queue.put(e)
-            
+
             # 在单独线程中执行函数
             thread = threading.Thread(target=target)
             thread.daemon = True
             thread.start()
-            
+
             # 等待结果或超时
             thread.join(timeout=seconds)
-            
+
             if thread.is_alive():
                 # 超时了
                 raise TimeoutError(f"函数 {func.__name__} 执行超时 ({seconds}秒)")
-            
+
             # 检查是否有异常
             if not exception_queue.empty():
                 raise exception_queue.get()
-            
+
             # 返回结果
             if not result_queue.empty():
                 return result_queue.get()
             else:
                 raise TimeoutError(f"函数 {func.__name__} 执行超时 ({seconds}秒)")
-        
+
         return wrapper
+
     return decorator
+
+
+def countdown(seconds: int, message: str = "等待中"):
+    """
+    倒计时函数，动态显示剩余时间
+
+    Args:
+        seconds: 倒计时的总秒数
+        message: 显示的前缀消息
+    """
+    for remaining in range(seconds, 0, -1):
+        mins, secs = divmod(remaining, 60)
+        time_str = f"{mins:02d}:{secs:02d}"
+        sys.stdout.write(f"\r{message} - 剩余时间: {time_str}")
+        sys.stdout.flush()
+        time.sleep(1)
+    sys.stdout.write("\r" + " " * 50 + "\r")  # 清除倒计时行
+    sys.stdout.flush()

@@ -382,3 +382,28 @@ def rename_conflict_file(file_name, sep="_"):
         logger.warning(f"文件 {original_file_name} 已存在，已重命名为: {file_name}")
 
     return file_name
+
+
+def read_unique_lines(file_path):
+    """
+    从文件中读取所有行并去重，保持首次出现的顺序
+
+    Args:
+        file_path: 文件路径（可以是 str 或 Path 对象）      Returns:
+        list: 去重后的行列表（去除空行）
+    """
+    file_path = Path(file_path)
+
+    # 读取所有行
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f.readlines()]
+
+    # 去除空行并去重，保持顺序
+    unique_lines = []
+    seen = set()
+    for line in lines:
+        if line and line not in seen:
+            unique_lines.append(line)
+            seen.add(line)
+
+    return unique_lines

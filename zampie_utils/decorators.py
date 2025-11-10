@@ -1,5 +1,6 @@
 import random
 import time
+import threading
 from functools import wraps
 
 from .logger import logger
@@ -276,4 +277,102 @@ def safe_execute(default_value=None, return_error=False):
 
         return wrapper
 
+    return decorator
+
+
+def timeout(seconds):
+    """
+    超时装饰器，为函数添加超时限制，超时则抛出 TimeoutError
+    
+    Args:
+        seconds (float): 超时时间（秒），必须大于0
+        
+    Returns:
+        function: 装饰器函数
+        
+    Raises:
+        TimeoutError: 当函数执行时间超过指定时间时抛出
+        
+    Features:
+        - 跨平台支持：使用 threading 模块实现，适用于 Windows 和 Unix 系统
+        - 自动清理：超时后自动清理线程资源
+        - 详细日志：记录超时信息
+        
+    Examples:
+        @timeout(5)
+        def slow_function():
+            time.sleep(10)  # 超过5秒会抛出 TimeoutError
+            return "完成"
+            
+        @timeout(2.5)
+        def api_call():
+            # API调用，2.5秒超时
+            return requests.get("http://example.com")
+            
+        try:
+            result = slow_function()
+        except TimeoutError as e:
+            print(f"函数执行超时: {e}")
+    """
+    
+    if seconds <= 0:
+        raise ValueError("超时时间必须大于0")
+    
+    def decorator(func):
+        """
+        内部装饰器函数
+        
+        Args:
+            func: 要装饰的函数
+            
+        Returns:
+            function: 包装后的函数
+        """
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            """
+            包装器函数，实现超时逻辑
+            
+            Args:
+                *args: 位置参数
+                **kwargs: 关键字参数
+                
+            Returns:
+                原函数的返回值
+                
+            Raises:
+                TimeoutError: 当函数执行时间超过指定时间时抛出
+            """
+            result = None
+            exception = None
+            
+            def target():
+                """在单独线程中执行的目标函数"""
+                nonlocal result, exception
+                try:
+                    result = func(*args, **kwargs)
+                except Exception as e:
+                    exception = e
+            
+            # 创建并启动线程
+            thread = threading.Thread(target=target)
+            thread.daemon = True  # 设置为守护线程
+            thread.start()
+            thread.join(timeout=seconds)  # 等待线程完成或超时
+            
+            # 检查是否超时
+            if thread.is_alive():
+                error_msg = f"函数 {func.__name__} 执行超时（超过 {seconds} 秒）"
+                logger.error(error_msg)
+                raise TimeoutError(error_msg)
+            
+            # 如果函数抛出了异常，重新抛出
+            if exception is not None:
+                raise exception
+            
+            # 返回函数结果
+            return result
+        
+        return wrapper
+    
     return decorator
