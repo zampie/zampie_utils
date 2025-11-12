@@ -241,26 +241,35 @@ def retry(retries=3, delay=1, backoff=0.25):
     return decorator
 
 
-def safe_execute(default_value=None, return_error=False):
+def safe_execute(raise_on_error=False, error_return_value=None):
     """
     安全执行装饰器，确保函数在出错时能够安全返回默认值或错误信息
 
     Args:
-        default_value: 出错时返回的默认值，如果为None且return_error=False，则返回None
-        return_error: 是否返回错误信息本身，优先级高于default_value
+        raise_on_error: 控制错误处理方式。
+            - True: 遇到错误时立即抛出异常
+            - False: 返回 error_return_value 指定的值（默认）
+        error_return_value: 当 raise_on_error=False 时，出错时返回的指定值。
+            - None: 返回 None（默认）
+            - "error_log": 返回错误信息字符串
+            - 其他值: 返回指定的值
 
     Examples:
-        @safe_execute(default_value="默认值")
+        @safe_execute(error_return_value="默认值")
         def risky_function():
             return 1 / 0  # 会返回 "默认值"
 
-        @safe_execute(return_error=True)
+        @safe_execute(error_return_value="error_log")
         def another_risky_function():
             return 1 / 0  # 会返回错误信息字符串
 
         @safe_execute()
         def safe_function():
             return 1 / 0  # 会返回 None
+
+        @safe_execute(raise_on_error=True)
+        def strict_function():
+            return 1 / 0  # 会抛出异常
     """
 
     def decorator(func):
@@ -269,7 +278,14 @@ def safe_execute(default_value=None, return_error=False):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                res = str(e) if return_error else default_value
+                if raise_on_error:
+                    raise
+                
+                if error_return_value == "error_log":
+                    res = str(e)
+                else:
+                    res = error_return_value
+                
                 error_msg = f"函数 {func.__name__} 执行出错: {type(e).__name__}: {e}, 返回值: {res}"
                 logger.error(error_msg)
 

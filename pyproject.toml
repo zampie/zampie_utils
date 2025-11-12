@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zampie_utils"
-version = "0.8.5"
+version = "0.8.6"
 description = "A collection of utility functions"
 readme = "README.md"
 license = "MIT"
@@ -37,3 +37,7 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["zampie_utils*"] 
+
+[tool.ruff]
+line-length = 240
+
