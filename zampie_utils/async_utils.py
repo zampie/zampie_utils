@@ -387,3 +387,156 @@ def auto_map(
         Exception: 当 raise_on_error=True 且函数执行出错时抛出异常
     """
     return parallel_map(func, items, description, log_level, max_workers, progress_type, unpack_args, unpack_kwargs, raise_on_error, error_return_value)
+
+
+def parallel_execute(tasks, max_workers=None, raise_on_error=False, error_return_value=None):
+    """
+    同时执行多个函数，并返回每个函数的返回值
+    
+    Args:
+        tasks: 任务列表，每个任务可以是以下格式之一：
+            - 函数对象（无参数函数）：直接传入函数
+            - (函数, args) 元组：args 可以是元组/列表（位置参数）
+            - (函数, args, kwargs) 元组：args 是元组/列表，kwargs 是字典
+            - {'func': 函数, 'args': 元组/列表, 'kwargs': 字典} 字典格式
+            - {'func': 函数, 'args': 元组/列表} 字典格式（仅位置参数）
+            - {'func': 函数, 'kwargs': 字典} 字典格式（仅关键字参数）
+        max_workers: 最大工作线程数，默认为任务数量
+        raise_on_error: 控制错误处理方式。
+            - True: 遇到错误时立即抛出异常
+            - False: 将错误信息添加到结果列表中（默认）
+        error_return_value: 当 raise_on_error=False 时，出错时返回的指定值。
+            - None: 返回 None（默认）
+            - "error_log": 返回错误信息字符串
+            - 其他值: 返回指定的值
+    
+    Returns:
+        按输入顺序排列的结果列表，每个元素对应一个任务的返回值
+    
+    Raises:
+        Exception: 当 raise_on_error=True 且函数执行出错时抛出异常
+    
+    Examples:
+        # 无参数函数
+        def func1():
+            return 1
+        def func2():
+            return 2
+        
+        results = parallel_execute([func1, func2])
+        # 返回: [1, 2]
+        
+        # 带位置参数
+        def add(a, b):
+            return a + b
+        
+        results = parallel_execute([
+            (add, (1, 2)),
+            (add, (3, 4)),
+        ])
+        # 返回: [3, 7]
+        
+        # 带关键字参数
+        def greet(name, age=0):
+            return f"{name} is {age} years old"
+        
+        results = parallel_execute([
+            (greet, (), {'name': 'Alice', 'age': 25}),
+            (greet, (), {'name': 'Bob'}),
+        ])
+        # 返回: ['Alice is 25 years old', 'Bob is 0 years old']
+        
+        # 混合参数
+        def calculate(x, y, operation='add'):
+            if operation == 'add':
+                return x + y
+            return x - y
+        
+        results = parallel_execute([
+            {'func': calculate, 'args': (1, 2), 'kwargs': {'operation': 'add'}},
+            {'func': calculate, 'args': (5, 3), 'kwargs': {'operation': 'subtract'}},
+        ])
+        # 返回: [3, 2]
+    """
+    if not tasks:
+        return []
+    
+    # 默认工作线程数为任务数量
+    if max_workers is None:
+        max_workers = len(tasks)
+    
+    # 解析任务并创建执行函数
+    def parse_and_execute(task, index):
+        """解析任务并执行"""
+        try:
+            # 如果是函数对象（可调用且不是元组/列表/字典）
+            if callable(task) and not isinstance(task, (tuple, list, dict)):
+                return task()
+            
+            # 如果是元组
+            elif isinstance(task, (tuple, list)):
+                if len(task) == 0:
+                    raise ValueError("任务元组不能为空")
+                func = task[0]
+                args = task[1] if len(task) > 1 else ()
+                kwargs = task[2] if len(task) > 2 else {}
+                
+                if not isinstance(args, (tuple, list)):
+                    args = (args,)
+                if not isinstance(kwargs, dict):
+                    kwargs = {}
+                
+                return func(*args, **kwargs)
+            
+            # 如果是字典
+            elif isinstance(task, dict):
+                if 'func' not in task:
+                    raise ValueError("任务字典必须包含 'func' 键")
+                
+                func = task['func']
+                args = task.get('args', ())
+                kwargs = task.get('kwargs', {})
+                
+                if not isinstance(args, (tuple, list)):
+                    args = (args,) if args is not None else ()
+                if not isinstance(kwargs, dict):
+                    kwargs = {}
+                
+                return func(*args, **kwargs)
+            
+            else:
+                raise ValueError(f"不支持的任务格式: {type(task)}")
+        
+        except Exception as e:
+            logger.error(f"Error executing task {index}: {e}")
+            if raise_on_error:
+                raise
+            if error_return_value == "error_log":
+                return str(e)
+            return error_return_value
+    
+    # 执行任务
+    results = [None] * len(tasks)
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # 提交所有任务，并保存任务和索引的映射
+        future_to_index = {
+            executor.submit(parse_and_execute, task, i): i
+            for i, task in enumerate(tasks)
+        }
+        
+        # 按完成顺序获取结果，但保存到正确的位置
+        for future in as_completed(future_to_index):
+            index = future_to_index[future]
+            try:
+                results[index] = future.result()
+            except Exception as e:
+                logger.error(f"Error getting result for task {index}: {e}")
+                if raise_on_error:
+                    raise
+                if error_return_value == "error_log":
+                    results[index] = str(e)
+                else:
+                    results[index] = error_return_value
+    
+    return results
