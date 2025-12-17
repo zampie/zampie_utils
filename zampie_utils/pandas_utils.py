@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, List, Optional, Dict, Any
 
+import numpy as np
 import pandas as pd
 
 from .logger import logger
@@ -249,4 +250,218 @@ def save_df(df: pd.DataFrame, save_path: Union[str, Path], **kwargs) -> None:
         f".json, .jsonl, .parquet, .pkl, .pickle, .html, .htm, "
         f".xml, .feather, .h5, .hdf5"
     )
+
+
+def read_df_multi(
+    file_paths: Union[List[Union[str, Path]], Union[str, Path]],
+    read_kwargs: Optional[Dict[str, Any]] = None,
+    concat_kwargs: Optional[Dict[str, Any]] = None,
+    **kwargs
+) -> pd.DataFrame:
+    """
+    读取多个文件并合并为一个DataFrame
+    
+    支持读取多个相同或不同格式的文件，并使用pandas.concat进行合并。
+    所有文件必须具有相同的列结构（或使用join参数处理列不一致的情况）。
+    
+    Args:
+        file_paths: 文件路径列表或单个文件路径（字符串或Path对象）
+        read_kwargs: 传递给read_df函数的参数字典（用于所有文件）
+        concat_kwargs: 传递给pd.concat函数的参数字典
+        **kwargs: 额外的参数，会合并到read_kwargs中（如果read_kwargs为None则创建新字典）
+        
+    Returns:
+        pd.DataFrame: 合并后的DataFrame
+        
+    Raises:
+        ValueError: 文件路径列表为空
+        FileNotFoundError: 文件不存在
+        
+    Examples:
+        >>> # 读取多个CSV文件并合并
+        >>> df = read_df_multi(['file1.csv', 'file2.csv', 'file3.csv'])
+        
+        >>> # 读取多个文件，指定读取参数
+        >>> df = read_df_multi(
+        ...     ['data1.xlsx', 'data2.xlsx'],
+        ...     read_kwargs={'sheet_name': 0}
+        ... )
+        
+        >>> # 读取多个文件，指定合并参数
+        >>> df = read_df_multi(
+        ...     ['file1.csv', 'file2.csv'],
+        ...     concat_kwargs={'ignore_index': True, 'sort': False}
+        ... )
+        
+        >>> # 使用kwargs快捷方式
+        >>> df = read_df_multi(
+        ...     ['file1.json', 'file2.json'],
+        ...     encoding='utf-8',
+        ...     concat_kwargs={'ignore_index': True}
+        ... )
+        
+        >>> # 处理列不一致的情况
+        >>> df = read_df_multi(
+        ...     ['file1.csv', 'file2.csv'],
+        ...     concat_kwargs={'join': 'outer'}  # 使用外连接保留所有列
+        ... )
+    """
+    # 处理文件路径参数
+    if isinstance(file_paths, (str, Path)):
+        file_paths = [file_paths]
+    
+    if not file_paths:
+        raise ValueError("文件路径列表不能为空")
+    
+    # 合并read_kwargs和kwargs
+    if read_kwargs is None:
+        read_kwargs = {}
+    if kwargs:
+        read_kwargs = {**read_kwargs, **kwargs}
+    
+    # 设置默认的concat_kwargs
+    if concat_kwargs is None:
+        concat_kwargs = {}
+    concat_kwargs.setdefault('ignore_index', True)  # 默认忽略索引，重新生成
+    
+    # 读取所有文件
+    dfs = []
+    for file_path in file_paths:
+        file_path = Path(file_path)
+        logger.info(f"正在读取文件: {file_path}")
+        df = read_df(file_path, **read_kwargs)
+        dfs.append(df)
+        logger.info(f"成功读取文件: {file_path} (形状: {df.shape[0]}行 × {df.shape[1]}列)")
+    
+    # 合并DataFrame
+    if not dfs:
+        raise ValueError("没有成功读取任何文件")
+    
+    logger.info(f"正在合并 {len(dfs)} 个DataFrame...")
+    result_df = pd.concat(dfs, **concat_kwargs)
+    logger.info(f"成功合并为DataFrame (形状: {result_df.shape[0]}行 × {result_df.shape[1]}列)")
+    
+    return result_df
+
+
+def save_df_split(
+    df: pd.DataFrame,
+    n_parts: int,
+    save_path_template: Union[str, Path],
+    save_kwargs: Optional[Dict[str, Any]] = None,
+    **kwargs
+) -> List[Path]:
+    """
+    将DataFrame切分为指定份数并保存为多个文件
+    
+    将DataFrame按行切分为n_parts份，每份保存为单独的文件。
+    文件名会在模板路径中自动插入序号，例如 'data.csv' 会生成 'data_1.csv', 'data_2.csv' 等。
+    
+    Args:
+        df: 要切分的DataFrame
+        n_parts: 切分的份数（必须大于0且小于等于DataFrame行数）
+        save_path_template: 保存路径模板，用于生成多个文件的保存路径。
+            函数会在文件名（不含扩展名）和扩展名之间插入序号。
+            支持以下格式：
+            - 简单文件名: 'data.csv' -> 生成 'data_1.csv', 'data_2.csv', ...
+            - 相对路径: 'output/data.csv' -> 生成 'output/data_1.csv', 'output/data_2.csv', ...
+            - 绝对路径: '/path/to/results.xlsx' -> 生成 '/path/to/results_1.xlsx', ...
+            - 带目录的路径: 'results/data.json' -> 生成 'results/data_1.json', ...
+            
+            文件名生成规则：
+            - 提取路径的文件名部分（不含扩展名）作为基础名称
+            - 提取扩展名确定文件格式
+            - 在基础名称和扩展名之间插入序号：{基础名称}_{序号}{扩展名}
+            
+            示例转换：
+            - 'data.csv' -> 'data_1.csv', 'data_2.csv', 'data_3.csv'
+            - 'output.xlsx' -> 'output_1.xlsx', 'output_2.xlsx', 'output_3.xlsx'
+            - 'folder/results.json' -> 'folder/results_1.json', 'folder/results_2.json', ...
+            - '/absolute/path/file.parquet' -> '/absolute/path/file_1.parquet', ...
+        save_kwargs: 传递给save_df函数的参数字典（用于所有文件）
+        **kwargs: 额外的参数，会合并到save_kwargs中（如果save_kwargs为None则创建新字典）
+        
+    Returns:
+        List[Path]: 保存的文件路径列表，按切分顺序排列
+        
+    Raises:
+        ValueError: 份数小于等于0，或份数大于DataFrame行数
+        
+    Examples:
+        >>> # 示例1: 基本用法 - 简单文件名
+        >>> paths = save_df_split(df, 3, 'data.csv')
+        >>> # 生成文件: data_1.csv, data_2.csv, data_3.csv
+        >>> # 返回: [Path('data_1.csv'), Path('data_2.csv'), Path('data_3.csv')]
+        
+        >>> # 示例2: 保存为Excel格式
+        >>> paths = save_df_split(df, 5, 'output.xlsx')
+        >>> # 生成文件: output_1.xlsx, output_2.xlsx, output_3.xlsx, output_4.xlsx, output_5.xlsx
+        
+        >>> # 示例3: 保存到指定目录
+        >>> paths = save_df_split(df, 4, 'results/data.json')
+        >>> # 生成文件: results/data_1.json, results/data_2.json, results/data_3.json, results/data_4.json
+        >>> # 注意: 如果results目录不存在，会自动创建
+        
+        >>> # 示例4: 使用绝对路径
+        >>> paths = save_df_split(df, 3, '/home/user/output/data.parquet')
+        >>> # 生成文件: /home/user/output/data_1.parquet, /home/user/output/data_2.parquet, ...
+        
+        >>> # 示例5: 指定保存参数（不保存索引）
+        >>> paths = save_df_split(
+        ...     df, 3, 'data.csv',
+        ...     save_kwargs={'index': False}
+        ... )
+        
+        >>> # 示例6: 使用kwargs快捷方式传递保存参数
+        >>> paths = save_df_split(
+        ...     df, 4, 'data.json',
+        ...     orient='records'  # 直接传递给save_df
+        ... )
+        
+        >>> # 示例7: 保存为JSONL格式
+        >>> paths = save_df_split(df, 2, 'output.jsonl')
+        >>> # 生成文件: output_1.jsonl, output_2.jsonl
+        
+        >>> # 示例8: 保存为Parquet格式（带压缩）
+        >>> paths = save_df_split(
+        ...     df, 3, 'data.parquet',
+        ...     save_kwargs={'compression': 'gzip'}
+        ... )
+    """
+    if n_parts <= 0:
+        raise ValueError(f"份数必须大于0，当前值: {n_parts}")
+    
+    if n_parts > len(df):
+        raise ValueError(
+            f"份数({n_parts})不能大于DataFrame行数({len(df)})，"
+            f"请将份数调整为小于等于{len(df)}的值"
+        )
+    
+    # 合并save_kwargs和kwargs
+    if save_kwargs is None:
+        save_kwargs = {}
+    if kwargs:
+        save_kwargs = {**save_kwargs, **kwargs}
+    
+    # 解析保存路径模板
+    save_path_template = Path(save_path_template)
+    stem = save_path_template.stem  # 文件名（不含扩展名）
+    suffix = save_path_template.suffix  # 扩展名
+    parent = save_path_template.parent  # 目录
+    
+    # 切分DataFrame
+    logger.info(f"正在将DataFrame (形状: {df.shape[0]}行 × {df.shape[1]}列) 切分为 {n_parts} 份...")
+    dfs = np.array_split(df, n_parts)
+    
+    # 保存每一份
+    saved_paths = []
+    for i, split_df in enumerate(dfs, start=1):
+        # 生成文件名：stem_序号.suffix
+        save_path = parent / f"{stem}_{i}{suffix}"
+        save_df(split_df, save_path, **save_kwargs)
+        saved_paths.append(save_path)
+    
+    logger.info(f"成功将DataFrame切分为 {n_parts} 份并保存到 {len(saved_paths)} 个文件")
+    
+    return saved_paths
 
