@@ -465,3 +465,133 @@ def save_df_split(
     
     return saved_paths
 
+
+def merge_df_files(
+    file_paths: Union[List[Union[str, Path]], Union[str, Path]],
+    output_path: Union[str, Path],
+    read_kwargs: Optional[Dict[str, Any]] = None,
+    concat_kwargs: Optional[Dict[str, Any]] = None,
+    save_kwargs: Optional[Dict[str, Any]] = None,
+    **kwargs
+) -> Path:
+    """
+    将多个相同数据格式的文件合并为一个文件
+    
+    读取多个文件，合并为一个DataFrame，然后保存到指定的输出文件。
+    所有输入文件必须具有相同的数据格式（或使用join参数处理列不一致的情况）。
+    输出文件格式由output_path的后缀名自动确定。
+    
+    Args:
+        file_paths: 要合并的文件路径列表或单个文件路径（字符串或Path对象）
+        output_path: 输出文件路径，文件格式由后缀名确定
+        read_kwargs: 传递给read_df函数的参数字典（用于所有输入文件）
+        concat_kwargs: 传递给pd.concat函数的参数字典，用于控制合并方式
+        save_kwargs: 传递给save_df函数的参数字典，用于控制保存方式
+        **kwargs: 额外的参数，会合并到read_kwargs中（如果read_kwargs为None则创建新字典）
+        
+    Returns:
+        Path: 保存的输出文件路径
+        
+    Raises:
+        ValueError: 文件路径列表为空，或不支持的文件格式
+        FileNotFoundError: 输入文件不存在
+        
+    Examples:
+        >>> # 示例1: 基本用法 - 合并多个CSV文件
+        >>> merge_df_files(
+        ...     ['file1.csv', 'file2.csv', 'file3.csv'],
+        ...     'merged_output.csv'
+        ... )
+        
+        >>> # 示例2: 合并多个Excel文件
+        >>> merge_df_files(
+        ...     ['data1.xlsx', 'data2.xlsx', 'data3.xlsx'],
+        ...     'merged_data.xlsx',
+        ...     read_kwargs={'sheet_name': 0}
+        ... )
+        
+        >>> # 示例3: 合并多个JSON文件
+        >>> merge_df_files(
+        ...     ['file1.json', 'file2.json'],
+        ...     'merged.json',
+        ...     save_kwargs={'orient': 'records'}
+        ... )
+        
+        >>> # 示例4: 处理列不一致的情况（使用外连接）
+        >>> merge_df_files(
+        ...     ['file1.csv', 'file2.csv'],
+        ...     'merged.csv',
+        ...     concat_kwargs={'join': 'outer'}  # 保留所有列
+        ... )
+        
+        >>> # 示例5: 合并时忽略索引并排序
+        >>> merge_df_files(
+        ...     ['file1.csv', 'file2.csv'],
+        ...     'merged.csv',
+        ...     concat_kwargs={'ignore_index': True, 'sort': False}
+        ... )
+        
+        >>> # 示例6: 保存时指定参数（不保存索引）
+        >>> merge_df_files(
+        ...     ['file1.csv', 'file2.csv'],
+        ...     'merged.csv',
+        ...     save_kwargs={'index': False}
+        ... )
+        
+        >>> # 示例7: 使用kwargs快捷方式传递读取参数
+        >>> merge_df_files(
+        ...     ['file1.json', 'file2.json'],
+        ...     'merged.json',
+        ...     encoding='utf-8',
+        ...     concat_kwargs={'ignore_index': True}
+        ... )
+        
+        >>> # 示例8: 合并多个Parquet文件
+        >>> merge_df_files(
+        ...     ['data1.parquet', 'data2.parquet'],
+        ...     'merged.parquet',
+        ...     save_kwargs={'compression': 'gzip'}
+        ... )
+        
+        >>> # 示例9: 合并多个JSONL文件
+        >>> merge_df_files(
+        ...     ['file1.jsonl', 'file2.jsonl'],
+        ...     'merged.jsonl'
+        ... )
+    """
+    # 处理文件路径参数
+    if isinstance(file_paths, (str, Path)):
+        file_paths = [file_paths]
+    
+    if not file_paths:
+        raise ValueError("文件路径列表不能为空")
+    
+    # 合并read_kwargs和kwargs
+    if read_kwargs is None:
+        read_kwargs = {}
+    if kwargs:
+        read_kwargs = {**read_kwargs, **kwargs}
+    
+    # 设置默认的concat_kwargs
+    if concat_kwargs is None:
+        concat_kwargs = {}
+    concat_kwargs.setdefault('ignore_index', True)  # 默认忽略索引，重新生成
+    
+    # 读取并合并所有文件
+    logger.info(f"开始合并 {len(file_paths)} 个文件到: {output_path}")
+    merged_df = read_df_multi(
+        file_paths=file_paths,
+        read_kwargs=read_kwargs,
+        concat_kwargs=concat_kwargs
+    )
+    
+    # 保存合并后的DataFrame
+    if save_kwargs is None:
+        save_kwargs = {}
+    save_df(merged_df, output_path, **save_kwargs)
+    
+    output_path = Path(output_path)
+    logger.info(f"成功将 {len(file_paths)} 个文件合并并保存到: {output_path.resolve()}")
+    
+    return output_path
+

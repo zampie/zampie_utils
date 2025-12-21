@@ -7,6 +7,7 @@ from .utils import *
 from .decorators import *
 from .request_utils import *
 from .pandas_utils import *
+from .html_utils import *
 
 from .async_utils import auto_map as map
 

@@ -1,195 +1,371 @@
-import os
-from urllib.parse import urlparse
+from datetime import datetime
+import html
+import json as _json
+from pathlib import Path
 
-SERVER_URL = "http://127.0.0.1:8000/"
+import pandas as pd
+from rich import print
 
 
-def is_url(s):
-    try:
-        result = urlparse(s)
-        return all([result.scheme in ("http", "https"), result.netloc])
-    except Exception:
+# 注意：内联 <script> 的常见陷阱与修复要点
+# 1) 在 <script> 中注入 JSON 时，切勿做 HTML 转义（例如将引号变为 &quot;）。
+#    否则脚本会在解析时发生语法错误，导致后续函数（如 window.exportCSV / window.toggleAll）未定义。
+#    本文件通过直接注入 JSON 字符串（不经 HTML 转义）解决。
+# 2) 需要在内联 onclick 调用里可见函数时，将函数挂载到 window，例如：
+#    window.exportCSV = function() { ... }；window.toggleAll = function() { ... }。
+#    否则在某些环境/策略下，函数不在全局作用域会触发 ReferenceError。
+# 3) JS 字符串中的换行应使用 "\\n"（字面量转义）拼接到 CSV，避免实际换行打断脚本。
+
+
+def df_to_html(
+    df: pd.DataFrame,
+    title: str,
+    src_dir_hint: str = "",
+    with_checkbox: bool = False,
+) -> str:
+    """
+    生成可视化 HTML，with_checkbox=True 时包含“标记删除+导出未选中”的交互。
+    """
+
+    def esc(x: str) -> str:
+        return html.escape(x or "")
+
+    # 列类型推断：image_path / code / text
+    image_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+
+    def looks_like_path(val: str) -> bool:
+        if not val:
+            return False
+        s = str(val)
+        return ("/" in s or "\\" in s) and "." in Path(s).name
+
+    def looks_like_image(val: str) -> bool:
+        try:
+            return Path(str(val)).suffix.lower() in image_exts
+        except Exception:
+            return False
+
+    def looks_like_json(val: str) -> bool:
+        """检测字符串是否看起来像JSON格式"""
+        if not val:
+            return False
+        s = str(val).strip()
+        if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+            if '"' in s and (":" in s or "," in s):
+                return True
         return False
 
-
-def is_file(s):
-    return os.path.exists(s)
-
-
-def gen_td(part, enable_click_zoom=False, text_collapse_length=200):
-    """
-    生成HTML img标签
-    :param part: 图片URL或文本内容
-    :param enable_click_zoom: 是否启用点击放大功能
-    :param text_collapse_length: 文本折叠长度阈值
-    :return: HTML td标签字符串
-    """
-    part = str(part)
-    if is_url(part):
-        if enable_click_zoom:
-            return f"<td><img src='{part}' style='width: 360px; cursor: pointer;' class='zoomable-img' onclick='showModal(this.src)'></td>\n"
+    column_specs = []  # [{name, type}]
+    for col in df.columns:
+        name_lc = str(col).lower()
+        sample_vals = df[col].dropna().astype(str).head(20).tolist()
+        any_path_like = any(looks_like_path(v) for v in sample_vals)
+        any_image_like = any(looks_like_image(v) for v in sample_vals)
+        any_json_like = any(looks_like_json(v) for v in sample_vals)
+        if any_image_like or (
+            any_path_like
+            and ("img" in name_lc or "image" in name_lc or "pic" in name_lc)
+        ):
+            col_type = "image_path"
+        elif any_path_like or any_json_like or ("path" in name_lc or "file" in name_lc):
+            col_type = "code"
         else:
-            return f"<td><img src='{part}' style='width: 360px;'></td>\n"
-    elif is_file(part):
-        # 如果是本地文件，加上服务器地址
-        img_url = f"{SERVER_URL}{part}"
-        if enable_click_zoom:
-            return f"<td><img src='{img_url}' style='width: 360px; cursor: pointer;' class='zoomable-img' onclick='showModal(this.src)'></td>\n"
+            col_type = "text"
+        column_specs.append({"name": str(col), "type": col_type})
+
+    # 构建表格行：根据 with_checkbox 决定是否添加勾选列
+    rows_html = []
+    for idx, r in df.iterrows():
+        cells_html = []
+        for spec in column_specs:
+            col_name = spec["name"]
+            col_type = spec["type"]
+            val = r.get(col_name, "")
+            if isinstance(val, list):
+                val_str = str(val)
+            elif val is None or pd.isna(val):
+                val_str = ""
+            else:
+                val_str = str(val)
+            if col_type == "image_path":
+                img_onclick = ' onclick="openLightbox(this.src)"' if with_checkbox else ""
+                cells_html.append(
+                    f"""
+        <td style="padding:12px;vertical-align:top;border-bottom:1px solid #e5e7eb;">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <img class="zoomable-img" src="{esc(val_str)}" alt="{esc(col_name)}" style="width:min(100%, 480px);height:auto;border:1px solid #e5e7eb;border-radius:8px;display:block;cursor:pointer;"{img_onclick} />
+          </div>
+          <div class="cell-path" title="{esc(val_str)}" style="color:#6b7280;font-size:12px;margin-top:8px;max-width:480px;white-space:pre-wrap;word-break:break-all;">{esc(val_str)}</div>
+        </td>
+                    """
+                )
+            elif col_type == "code":
+                cells_html.append(
+                    f"""
+        <td style="padding:12px;vertical-align:top;border-bottom:1px solid #e5e7eb;">
+          <div class="cell-path" style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:12px; color:#374151; word-break:break-all;">{esc(val_str)}</div>
+        </td>
+                    """
+                )
+            else:
+                cells_html.append(
+                    f"""
+        <td style="padding:12px;vertical-align:top;border-bottom:1px solid #e5e7eb;white-space:pre-wrap;">{esc(val_str)}</td>
+                    """
+                )
+
+        row_cells = []
+        if with_checkbox:
+            row_cells.append(
+                """
+        <td style="padding:12px;vertical-align:top;border-bottom:1px solid #e5e7eb;text-align:center;">
+          <input type="checkbox" class="row-check" />
+        </td>
+                """
+            )
+        row_cells.append(
+            f"""
+        <td style="padding:12px;vertical-align:top;border-bottom:1px solid #e5e7eb;text-align:center;color:#6b7280;">{esc(str(idx))}</td>
+            """
+        )
+        row_cells.extend(cells_html)
+
+        rows_html.append(
+            f"""
+      <tr>
+        {"".join(row_cells)}
+      </tr>
+            """
+        )
+
+    colgroup_parts = []
+    if with_checkbox:
+        colgroup_parts.append('<col style="width: 6%;" />')  # 选择
+    colgroup_parts.append('<col style="width: 6%;" />')  # 索引
+    for spec in column_specs:
+        if spec["type"] == "image_path":
+            colgroup_parts.append('<col style="width: 26%;" />')
         else:
-            return f"<td><img src='{img_url}' style='width: 360px;'></td>\n"
+            colgroup_parts.append('<col style="width: 16%;" />')
 
-    # 处理文本内容，支持折叠
-    if len(part) > text_collapse_length:
-        preview_text = part[:50]
+    header_cells = []
+    if with_checkbox:
+        header_cells.append('<th style="text-align:center;">标记删除</th>')
+    header_cells.append('<th style="text-align:center;">索引</th>')
+    for spec in column_specs:
+        label = esc(spec["name"])
+        header_cells.append(f"<th>{label}</th>")
 
-        return f"""<td style='max-width:360px; word-break:break-all; white-space:pre-wrap;'>
-            <details>
-                <summary>{preview_text}...</summary>
-                <div style='margin-top: 8px;'>{part}</div>
-            </details>
-        </td>\n"""
-    else:
-        # 文本不长，正常显示
-        return f"<td style='max-width:360px; word-break:break-all; white-space:pre-wrap;'>{part}</td>\n"
+    toolbar_html = ""
+    if with_checkbox:
+        toolbar_html = """
+  <div class="toolbar">
+    <label style="display:flex;align-items:center;gap:6px;">
+      <input id="check-all" type="checkbox" onclick="toggleAll(this)" />
+      <span>全选</span>
+    </label>
+    <button class="btn secondary" onclick="exportCSV()">导出未选中为CSV</button>
+  </div>
+        """
 
+    column_specs_json = _json.dumps(column_specs, ensure_ascii=False)
 
-def process(lines):
-    # 生成html界面，每行一条，可视化img58_url和img60_url
-    html_content = "<html><head><meta charset='utf-8'></head><body>\n"
-    # html_content += "<h1>Image Generation Results</h1>\n"
-    html_content += "<table border='1'>\n"
-    # html_content += "<tr><th>query</th><th>caption</th><th>t1</th><th>t2</th><th>58</th><th>60</th><th>60 seed=42</th></tr>\n"
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split("\t")
-        print(len(parts))
-        html_content += "<tr>\n"
-        for part in parts:
-            html_content += gen_td(part)
-        html_content += "</tr>\n"
-    html_content += "</table>\n"
-    html_content += "</body></html>\n"
+    checkbox_script = ""
+    if with_checkbox:
+        checkbox_script = f"""
+  <script>
+    const columnSpecs = {column_specs_json};
 
-    return html_content
+    window.toggleAll = function(source){{
+      const checks = document.querySelectorAll('.row-check');
+      checks.forEach(c => {{ c.checked = source.checked; }});
+    }}
+    window.exportCSV = function(){{
+      const rows = Array.from(document.querySelectorAll('tbody tr'));
+      const header = ['index', ...columnSpecs.map(s => s.name)];
+      const data = [header];
+      rows.forEach(tr => {{
+        const checkbox = tr.querySelector('.row-check');
+        if (checkbox && checkbox.checked) return; // 勾选表示删除，导出未勾选
+        const tds = tr.querySelectorAll('td');
+        if (tds.length < 2) return; // 选择 + 索引
+        const indexCell = tds[1];
+        const idxText = (indexCell ? indexCell.textContent : '').trim();
+        const values = [];
+        for (let i = 0; i < columnSpecs.length; i++) {{
+          const td = tds[2 + i];
+          const spec = columnSpecs[i];
+          if (!td) {{ values.push(''); continue; }}
+          if (spec.type === 'image_path' || spec.type === 'code') {{
+            const div = td.querySelector('.cell-path');
+            values.push((div ? div.textContent : td.textContent).trim());
+          }} else {{
+            values.push((td.textContent || '').trim());
+          }}
+        }}
+        data.push([idxText, ...values]);
+      }});
+      const esc = (s) => {{
+        if (s == null) return '';
+        s = String(s);
+        if (s.includes('"') || s.includes(',') || s.includes('\\n')) {{
+          return '"' + s.replaceAll('"','""') + '"';
+        }}
+        return s;
+      }};
+      const csv = data.map(row => row.map(esc).join(',')).join('\\n');
+      const blob = new Blob([csv], {{ type: 'text/csv;charset=utf-8;' }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hour = String(now.getHours()).padStart(2, '0');
+      const minute = String(now.getMinutes()).padStart(2, '0');
+      const date = month + '_' + day + '_' + hour + '_' + minute;
+      a.href = url;
+      a.download = (document.title || 'kept') + '_' + date + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }}
+  </script>
+        """
 
+    lightbox_script = """
+  <script>
+    (function() {
+      const lb = document.getElementById('lightbox');
+      const im = document.getElementById('lightbox-img');
+      function openLightbox(src) {
+        if (!lb || !im) return;
+        im.src = src || '';
+        lb.style.display = 'flex';
+      }
+      function closeLightbox() {
+        if (!lb || !im) return;
+        im.src = '';
+        lb.style.display = 'none';
+      }
+      window.openLightbox = openLightbox;
+      window.closeLightbox = closeLightbox;
+      if (lb) {
+        lb.addEventListener('click', function() {
+          closeLightbox();
+        });
+      }
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeLightbox();
+        }
+      });
+      document.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('zoomable-img')) {
+          openLightbox(target.src);
+        }
+      });
+    })();
+  </script>
+    """
 
-def process_df(df):
-    html_content = """<html>
+    return f"""
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-    <meta charset='utf-8'>
-    <style>
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.9);
-        }
-        .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            max-width: 90%;
-            max-height: 90%;
-        }
-        .close {
-            position: absolute;
-            top: 15px;
-            right: 35px;
-            color: #f1f1f1;
-            font-size: 40px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close:hover,
-        .close:focus {
-            color: #bbb;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .zoomable-img:hover {
-            opacity: 0.8;
-        }
-        details {
-            cursor: pointer;
-        }
-        summary {
-            list-style-type: none;
-            position: relative;
-            padding-left: 20px;
-        }
-        summary::-webkit-details-marker {
-            display: none;
-        }
-        summary::before {
-            content: '▶';
-            position: absolute;
-            left: 0;
-            color: #666;
-            font-size: 12px;
-        }
-        details[open] summary::before {
-            content: '▼';
-        }
-        details[open] summary {
-            margin-bottom: 8px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{esc(title)}</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif; margin: 16px; color: #1f2937; }}
+    h1 {{ font-size: 22px; margin: 0 0 12px; }}
+    .meta {{ color: #6b7280; font-size: 12px; margin-bottom: 16px; }}
+    table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+    th, td {{ word-break: break-word; }}
+    th {{ text-align:left; padding:12px; border-bottom:2px solid #e5e7eb; }}
+    .toolbar {{ display:flex; gap:10px; margin: 8px 0 14px; flex-wrap: wrap; }}
+    .btn {{ background:#111827; color:white; border:1px solid #111827; padding:8px 12px; border-radius:8px; cursor:pointer; }}
+    .btn.secondary {{ background:#ffffff; color:#111827; border:1px solid #e5e7eb; }}
+    .btn:disabled {{ opacity:.6; cursor:not-allowed; }}
+  </style>
+  <meta name="robots" content="noindex" />
+  <meta name="color-scheme" content="light dark" />
+  <style>
+    @media (prefers-color-scheme: dark) {{
+      body {{ color: #e5e7eb; background:#0b0f19; }}
+      .meta {{ color: #9ca3af; }}
+      table {{ color: #e5e7eb; }}
+      .btn.secondary {{ background:#0b0f19; color:#e5e7eb; border-color:#1f2a44; }}
+      .cell-path {{ color: #9ca3af !important; }}
+      td[style*="color:#374151"] {{ color: #9ca3af !important; }}
+      td[style*="color:#6b7280"] {{ color: #9ca3af !important; }}
+    }}
+    @media (max-width: 900px) {{
+      table {{ table-layout: auto; }}
+      col {{ width: auto !important; }}
+    }}
+    /* lightbox */
+    #lightbox {{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.8);
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+    }}
+    #lightbox img {{
+      max-width:90vw;
+      max-height:90vh;
+      border-radius:8px;
+      box-shadow:0 10px 30px rgba(0,0,0,.5);
+    }}
+  </style>
 </head>
 <body>
-    <div id="imageModal" class="modal">
-        <span class="close" onclick="closeModal()">&times;</span>
-        <img class="modal-content" id="modalImage">
-    </div>
-    <script>
-        function showModal(src) {
-            document.getElementById('imageModal').style.display = 'block';
-            document.getElementById('modalImage').src = src;
-        }
-        
-        function closeModal() {
-            document.getElementById('imageModal').style.display = 'none';
-        }
-        
-        // 点击模态框背景关闭
-        window.onclick = function(event) {
-            var modal = document.getElementById('imageModal');
-            if (event.target == modal) {
-                closeModal();
-            }
-        }
-        
-        // ESC键关闭模态框
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeModal();
-            }
-        });
-    </script>
+  <h1>{esc(title)}</h1>
+  <div class="meta">生成于 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} · 记录数：{len(df)}</div>
+  {toolbar_html}
+  <table>
+    <colgroup>
+      {"".join(colgroup_parts)}
+    </colgroup>
+    <thead>
+      <tr>
+        {"".join(header_cells)}
+      </tr>
+    </thead>
+    <tbody>
+      {"".join(rows_html)}
+    </tbody>
+  </table>
+  <div id="lightbox" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="preview" />
+  </div>
+  {checkbox_script}
+  {lightbox_script}
+</body>
+</html>
 """
-    html_content += "<table border='1'>\n"
-    html_content += "<tr>\n"
-    for col in df.columns:
-        html_content += f"<th>{col}</th>\n"
-    html_content += "</tr>\n"
-    for index, row in df.iterrows():
-        html_content += "<tr>\n"
-        for part in row:
-            html_content += gen_td(part, enable_click_zoom=True)
-        html_content += "</tr>\n"
-    html_content += "</table>\n"
-    html_content += "</body></html>\n"
-    return html_content
 
 
 if __name__ == "__main__":
-    # 读取保存的 DataFrame
-    # file_name = "df_279_sample_rewrite_gen2.txt"
-    file_name = "data_1_result.txt"
-    process(file_name)
+    input_path = "/data/data_processor/vlm/vqa/dpo_v2/output/King-ADV-002_sample_nomal_clean_rewrite_clean.xlsx"
+
+    input_path = Path(input_path)
+    OUT_DIR = Path(__file__).parent / "output"
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    df = pd.read_excel(input_path)
+
+    title = f"{input_path.stem}"
+    html_text = df_to_html(df, title, with_checkbox=False)
+
+    save_dir = Path(__file__).parent / "output"
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / f"{input_path.stem}.html"
+
+    save_path.write_text(html_text, encoding="utf-8")
+    print(f"[完成] 生成单页表格: {save_path}")
