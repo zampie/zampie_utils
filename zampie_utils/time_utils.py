@@ -1,3 +1,4 @@
+import sys
 import time
 import threading
 from functools import wraps
@@ -130,24 +131,14 @@ class Timer:
 
                     # 在锁内计算所有需要的数据，确保数据一致性
                     formatted_time, unit = format_time(elapsed_time, self.unit)
-                    total_formatted_time, total_unit = format_time(
-                        self.total_execution_time, self.unit
-                    )
-                    span_formatted_time, span_unit = format_time(
-                        self.span_execution_time, self.unit
-                    )
+                    total_formatted_time, total_unit = format_time(self.total_execution_time, self.unit)
+                    span_formatted_time, span_unit = format_time(self.span_execution_time, self.unit)
                     # 以总耗时 / 总次数 计算平均耗时
-                    avg_time = (
-                        (self.total_execution_time / self.turn) if self.turn else 0.0
-                    )
+                    avg_time = (self.total_execution_time / self.turn) if self.turn else 0.0
                     avg_formatted_time, avg_unit = format_time(avg_time, self.unit)
 
                     # 在锁内生成消息，使用唯一的执行序号
-                    msg = (
-                        f'"{display_name}" over, cost: {formatted_time:.2f} {unit}, '
-                        f"avg: {avg_formatted_time:.2f} {avg_unit}, "
-                        f"span: {span_formatted_time:.2f} {span_unit}, turn: {self.turn}"
-                    )
+                    msg = f'"{display_name}" over, cost: {formatted_time:.2f} {unit}, avg: {avg_formatted_time:.2f} {avg_unit}, span: {span_formatted_time:.2f} {span_unit}, turn: {self.turn}'
 
                     if error is not None:
                         msg += f", error: {error}"
